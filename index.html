@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地媒体虚拟展示空间</title>
     <style>
-        /* 开屏介绍样式保持不变... */
+        /* 开屏介绍样式 */
         #splash-screen {
             position: fixed;
             top: 0;
@@ -141,7 +141,7 @@
             text-align: center;
             line-height: 1.6;
         }
-        /* 基础样式保持不变... */
+        /* 基础样式 */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -541,10 +541,12 @@
 
             <div class="splash-controls">
                 <button id="start-button" class="start-button">开始体验</button>
-                <div class="quick-start">
-                    <p>操作指南：WASD移动，Shift跑步，ESC/右键解锁鼠标</p>
-                    <p>视频交互：靠近点击播放，Tab隐藏UI，F11全屏</p>
-                </div>
+				<div class="quick-start">
+					<p>操作指南：WASD移动，Shift跑步，ESC/右键解锁鼠标</p>
+					<p>视频交互：靠近点击播放，Tab隐藏UI，F11全屏</p>
+					<p>=================================</p>
+					<p>BM1300 | 249390193@qq.com</p>
+				</div>
             </div>
         </div>
     </div>
@@ -661,7 +663,7 @@
 		this.lastFpsUpdate = 0;
 		this.fps = 0;
 
-		// 动态分布相关属性 - 修改为无序加载方式
+		// 动态分布相关属性 - 无序加载方式
 		this.viewDistance = 70; // 可视距离
 		this.spawnDistance = 70; // 生成距离（最远）
 		this.minDistance = 10; // 最近生成距离
@@ -2193,12 +2195,12 @@
 		this.donationTexts = [];
 
 		// 创建上方的文字标签
-		const topText = this.createFloatingText('如果觉得还不错，不妨请开发者喝杯饮料吧！',
+		const topText = this.createFloatingText('如果觉得还不错，不妨扫描二维码请开发者喝杯饮料吧！',
 		new THREE.Vector3(0, 1.3, 0));
 		this.donationTexts.push(topText);
 
 		// 创建下方的文字标签
-		const bottomText = this.createFloatingText('扫描二维码打赏',
+		const bottomText = this.createFloatingText('邮箱：249390193@qq.com',
 		new THREE.Vector3(0, -1.3, 0));
 		this.donationTexts.push(bottomText);
 
