@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地媒体虚拟展示空间</title>
     <style>
-        /* 开屏介绍样式 */
+        /* 开屏介绍样式保持不变... */
         #splash-screen {
             position: fixed;
             top: 0;
@@ -431,6 +431,13 @@
             line-height: 1.5;
         }
 
+        #performance-stats.hidden
+        {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-10px);
+        }
+
         .stat-value {
             color: rgba(255, 255, 255, 0.9);
             font-weight: 600;
@@ -480,6 +487,25 @@
                 max-width: 250px;
             }
         }
+
+        /* 隐藏切换地面按钮 */
+        #toggle-ground
+        {
+            display: none !important;
+        }
+
+        /* 隐藏切换星空按钮 */
+        #toggle-stars
+        {
+            display: none !important;
+        }
+
+        /* 隐藏性能模式按钮 */
+        #performance-toggle
+        {
+            display: none !important;
+        }
+
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
@@ -517,7 +543,7 @@
                 <button id="start-button" class="start-button">开始体验</button>
                 <div class="quick-start">
                     <p>操作指南：WASD移动，Shift跑步，ESC/右键解锁鼠标</p>
-                    <p>视频交互：靠近点击播放，空格隐藏UI，F11全屏</p>
+                    <p>视频交互：靠近点击播放，Tab隐藏UI，F11全屏</p>
                 </div>
             </div>
         </div>
@@ -526,15 +552,15 @@
 
     <div id="ui">
         <div class="panel-title">媒体控制</div>
-        <div class="button-group">
-            <button id="import-folder">导入文件夹</button>
-            <button id="import-files">导入文件</button>
-            <button id="remove-all">移除所有媒体</button>
-            <button id="reset-position">人物复位</button>
-            <button id="performance-toggle">性能模式</button>
-            <button id="toggle-ground">切换地面</button>
-            <button id="toggle-stars">切换星空</button>
-        </div>
+		<div class="button-group">
+			<button id="import-folder">导入文件夹</button>
+			<button id="import-files">导入文件</button>
+			<button id="remove-all">清空</button>
+			<button id="reset-position">人物复位</button>
+			<button id="performance-toggle">性能模式</button>
+			<button id="toggle-ground">切换地面</button>
+			<button id="toggle-stars">切换星空</button>
+		</div>
     </div>
 
     <div id="performance-stats">
@@ -564,7 +590,7 @@
         <br>
         视频播放: 靠近点击 | 左/右方向键快退/快进5秒
         <br>
-        隐藏UI: 空格 | 全屏: F11
+        隐藏UI: Tab | 全屏: F11
     </div>
 
     <div id="video-controls" class="hidden">
@@ -604,2022 +630,2036 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
-    <script>
-        // 主应用程序类 - 简约现代版
-        class VirtualMediaSpace {
-        constructor() {
-        this.scene = null;
-        this.camera = null;
-        this.renderer = null;
-        this.controls = null;
-
-        this.mediaObjects = []; // 所有媒体对象
-        this.visibleMedia = []; // 当前可见的媒体对象
-        this.mediaPool = []; // 媒体池，用于复用
-        this.currentlyPlaying = null;
-
-        this.isImmersive = false;
-        this.lastMoveTime = Date.now();
-        this.crosshairVisible = true;
-        this.isPointerLocked = false;
-
-        this.videoControlsVisible = false;
-
-        // 性能优化相关属性
-        this.performanceMode = false;
-        this.loadingQueue = [];
-        this.isLoading = false;
-        this.loadedCount = 0;
-        this.totalToLoad = 0;
-        this.frameCount = 0;
-        this.lastFpsUpdate = 0;
-        this.fps = 0;
-
-        // 动态分布相关属性
-        this.viewDistance = 70; // 可视距离
-        this.spawnDistance = 50; // 生成距离
-        this.minSpacing = 9; // 最小间距（米）
-        this.maxVisibleMedia = 40; // 最大可见媒体数量
-        this.gridSize = this.minSpacing; // 网格大小
-        this.occupiedGrids = new Set(); // 已占用的网格位置
-        this.lastSpawnCheck = 0;
-        this.spawnInterval = 500; // 生成检查间隔（毫秒）
-        this.donationQR = null; // 打赏二维码对象
-
-        // 内存管理
-        this.maxMediaObjects = 2000; // 最大媒体对象数量
-        this.unloadDistance = 70; // 卸载距离（米）
-
-        // 星空粒子
-        this.stars = null;
-        this.twinklingStars = null;
-        this.starLayers = [];
-        this.starfieldEnabled = true;
-        this.time = 0; // 用于星空动画的时间变量
-
-        // 地面相关
-        this.groundEnabled = true;
-        this.groundType = 'grid'; // 'grid' 或 'marble'
-        this.groundObjects = [];
-        this.groundReflection = null;
-
-        // 视频控制相关
-        this.currentlyPlaying = null;
-        this.videoControlsVisible = false;
-
-        this.init();
-        this.setupEventListeners();
-        this.animate();
-        this.startPerformanceMonitoring();
-        }
-
-        // 视频快进快退方法
-        seekVideo(seconds) {
-        if (this.currentlyPlaying &&
-        this.currentlyPlaying.element &&
-        this.currentlyPlaying.type === 'video') {
-
-        const video = this.currentlyPlaying.element;
-
-        // 计算新的时间
-        let newTime = video.currentTime + seconds;
-
-        // 确保时间在有效范围内
-        newTime = Math.max(0, Math.min(newTime, video.duration));
-
-        // 设置新的时间
-        video.currentTime = newTime;
-
-        // 更新视频控制UI
-        this.updateVideoControlsUI();
-
-        // 显示操作提示（可选）
-        this.showSeekFeedback(seconds);
-
-        console.log(`视频 ${seconds > 0 ? '快进' : '快退'} ${Math.abs(seconds)} 秒，新时间: ${newTime.toFixed(1)}/${video.duration.toFixed(1)}`);
-        }
-        }
-
-        init() {
-        // 创建场景
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x0a0b14);
-
-        // 创建相机
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.y = 1.7; // 设置人物高度为1.7米
-
-        // 创建渲染器
-        this.renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        powerPreference: "high-performance"
-        });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.shadowMap.enabled = false; // 简约风格不需要阴影
-        document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-
-        // 添加微弱的全局环境光
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-        this.scene.add(ambientLight);
-
-        // 添加一点方向光，使场景更有层次感
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.2);
-        directionalLight.position.set(50, 100, 50);
-        this.scene.add(directionalLight);
-
-        // 创建改进的星空背景
-        this.createImprovedStarfield();
-
-        // 创建改进的地面
-        this.createEnhancedGround();
-
-        // 创建打赏二维码
-        this.createDonationQRCode();
-
-        // 初始化第一人称控制器
-        this.setupFirstPersonControls();
-        }
-
-        // 创建改进的星空
-        createImprovedStarfield() {
-        // 清空之前的星空
-        if (this.starLayers.length > 0) {
-        this.starLayers.forEach(layer => this.scene.remove(layer.mesh));
-        this.starLayers = [];
-        }
-
-        if (!this.starfieldEnabled) return;
-
-        // 创建三层星空，不同大小和亮度，模拟深度
-        const layerConfigs = [
-        { count: 4000, size: 0.6, opacity: 0.15, radius: 600, speed: 0.00005 }, // 远处小星星
-        { count: 3000, size: 1.0, opacity: 0.4, radius: 400, speed: 0.00003 }, // 中距离星星
-        { count: 1500, size: 1.5, opacity: 0.8, radius: 250, speed: 0.00001 }  // 近处亮星星
-        ];
-
-        layerConfigs.forEach((config, layerIndex) => {
-        const starGeometry = new THREE.BufferGeometry();
-        const starPositions = new Float32Array(config.count * 3);
-        const starColors = new Float32Array(config.count * 3);
-        const starSizes = new Float32Array(config.count);
-        const starAlphas = new Float32Array(config.count);
-        const starSpeeds = new Float32Array(config.count);
-
-        for (let i = 0; i < config.count * 3; i += 3) {
-        // 球状分布
-        const radius = config.radius + (Math.random() * 100);
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-
-        starPositions[i] = radius * Math.sin(phi) * Math.cos(theta);
-        starPositions[i + 1] = radius * Math.sin(phi) * Math.sin(theta);
-        starPositions[i + 2] = radius * Math.cos(phi);
-
-        // 随机颜色（冷色调）
-        const color = new THREE.Color();
-        const hue = 0.6 + (Math.random() * 0.1); // 蓝色调
-        const saturation = 0.2 + (Math.random() * 0.2);
-        const lightness = 0.7 + (Math.random() * 0.3);
-        color.setHSL(hue, saturation, lightness);
-
-        starColors[i] = color.r;
-        starColors[i + 1] = color.g;
-        starColors[i + 2] = color.b;
-
-        // 随机大小
-        starSizes[i / 3] = config.size * (0.5 + Math.random() * 0.8);
-
-        // 随机透明度
-        starAlphas[i / 3] = config.opacity * (0.7 + Math.random() * 0.6);
-
-        // 随机闪烁速度
-        starSpeeds[i / 3] = 1 + Math.random() * 3;
-        }
-
-        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-        starGeometry.setAttribute('alpha', new THREE.BufferAttribute(starAlphas, 1));
-        starGeometry.setAttribute('speed', new THREE.BufferAttribute(starSpeeds, 1));
-
-        // 创建星星材质
-        const starMaterial = new THREE.PointsMaterial({
-        vertexColors: true,
-        size: config.size,
-        sizeAttenuation: true,
-        transparent: true,
-        opacity: 1.0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-        });
-
-        const starLayer = new THREE.Points(starGeometry, starMaterial);
-        starLayer.userData = {
-        speed: config.speed,
-        timeOffset: Math.random() * 1000
-        };
-
-        this.scene.add(starLayer);
-        this.starLayers.push({
-        mesh: starLayer,
-        material: starMaterial,
-        speed: config.speed,
-        geometry: starGeometry,
-        alphas: starAlphas,
-        speeds: starSpeeds
-        });
-        });
-        }
-
-        // 更新星空动画
-        updateStarfield() {
-        if (!this.starfieldEnabled || this.starLayers.length === 0) return;
-
-        this.time += 0.016; // 约60fps的时间增量
-
-        this.starLayers.forEach(layer => {
-        // 轻微旋转，模拟星空移动
-        layer.mesh.rotation.y += layer.speed;
-
-        // 更新星星的闪烁效果
-        if (layer.geometry.attributes.alpha) {
-        const alphas = layer.alphas;
-        const speeds = layer.speeds;
-        const newAlphas = new Float32Array(alphas.length);
-
-        for (let i = 0; i < alphas.length; i++) {
-        // 使用正弦波创建闪烁效果
-        const twinkle = Math.sin(this.time * speeds[i]) * 0.3 + 0.7;
-        newAlphas[i] = alphas[i] * twinkle;
-        }
-
-        // 更新几何体属性
-        layer.geometry.setAttribute('alpha', new THREE.BufferAttribute(newAlphas, 1));
-        layer.geometry.attributes.alpha.needsUpdate = true;
-        }
-        });
-        }
-
-        // 切换星空显示
-        toggleStarfield() {
-        this.starfieldEnabled = !this.starfieldEnabled;
-
-        if (this.starfieldEnabled) {
-        this.createImprovedStarfield();
-        } else {
-        this.starLayers.forEach(layer => this.scene.remove(layer.mesh));
-        this.starLayers = [];
-        }
-
-        // 更新按钮文本
-        const button = document.getElementById('toggle-stars');
-        button.textContent = this.starfieldEnabled ? '关闭星空' : '开启星空';
-        }
-
-        // 创建改进的地面
-        createEnhancedGround() {
-        // 清空之前的地面对象
-        if (this.groundObjects.length > 0) {
-        this.groundObjects.forEach(obj => this.scene.remove(obj));
-        this.groundObjects = [];
-        }
-
-        if (!this.groundEnabled) return;
-
-        // 主地面平面
-        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
-
-        if (this.groundType === 'grid') {
-        // 网格地面
-        const groundMaterial = new THREE.MeshPhongMaterial({
-        color: 0x1a1d2b,
-        side: THREE.DoubleSide,
-        shininess: 10,
-        specular: 0x222222
-        });
-
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.1;
-        this.scene.add(ground);
-        this.groundObjects.push(ground);
-
-        // 添加精细的网格线
-        this.createRefinedGridLines();
-
-        } else if (this.groundType === 'marble') {
-        // 大理石纹理地面
-        this.createMarbleGround();
-        }
-
-        // 添加地面反射效果
-        this.createGroundReflection();
-        }
-
-        // 创建精致的网格线
-        createRefinedGridLines() {
-        const gridSize = 1000;
-        const divisions = 200; // 增加细分，使网格更密集
-        const step = gridSize / divisions; // 5米一格
-        const halfSize = gridSize / 2;
-
-        // 创建网格线组
-        const gridGroup = new THREE.Group();
-
-        // 主要网格线 - 更细、更淡
-        const gridMaterial = new THREE.LineBasicMaterial({
-        color: 0x3a3d4b, // 更浅的颜色
-        transparent: true,
-        opacity: 0.08, // 更低的透明度
-        linewidth: 0.5
-        });
-
-        // X轴方向的线
-        for (let i = -divisions/2; i <= divisions/2; i++) {
-        // 每10条线一条稍粗的线
-        const isMajorLine = i % 10 === 0;
-        const material = isMajorLine ?
-        new THREE.LineBasicMaterial({
-        color: 0x4a4d5b,
-        transparent: true,
-        opacity: 0.12,
-        linewidth: 1
-        }) :
-        gridMaterial;
-
-        const points = [];
-        points.push(new THREE.Vector3(i * step, 0.02, -halfSize));
-        points.push(new THREE.Vector3(i * step, 0.02, halfSize));
-
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const line = new THREE.Line(geometry, material);
-        gridGroup.add(line);
-        }
-
-        // Z轴方向的线
-        for (let i = -divisions/2; i <= divisions/2; i++) {
-        // 每10条线一条稍粗的线
-        const isMajorLine = i % 10 === 0;
-        const material = isMajorLine ?
-        new THREE.LineBasicMaterial({
-        color: 0x4a4d5b,
-        transparent: true,
-        opacity: 0.12,
-        linewidth: 1
-        }) :
-        gridMaterial;
-
-        const points = [];
-        points.push(new THREE.Vector3(-halfSize, 0.02, i * step));
-        points.push(new THREE.Vector3(halfSize, 0.02, i * step));
-
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const line = new THREE.Line(geometry, material);
-        gridGroup.add(line);
-        }
-
-        // 中心坐标轴 - 更柔和
-        const axisMaterial = new THREE.LineBasicMaterial({
-        color: 0x5a7ddc, // 更柔和的蓝色
-        transparent: true,
-        opacity: 0.2,
-        linewidth: 1.5
-        });
-
-        // X轴（红色）
-        const xAxisMaterial = new THREE.LineBasicMaterial({
-        color: 0xff6b6b,
-        transparent: true,
-        opacity: 0.15,
-        linewidth: 1.5
-        });
-
-        const xAxisPoints = [
-        new THREE.Vector3(-20, 0.03, 0),
-        new THREE.Vector3(20, 0.03, 0)
-        ];
-        const xAxisGeometry = new THREE.BufferGeometry().setFromPoints(xAxisPoints);
-        const xAxis = new THREE.Line(xAxisGeometry, xAxisMaterial);
-        gridGroup.add(xAxis);
-
-        // Z轴（蓝色）
-        const zAxisMaterial = new THREE.LineBasicMaterial({
-        color: 0x4d8aff,
-        transparent: true,
-        opacity: 0.15,
-        linewidth: 1.5
-        });
-
-        const zAxisPoints = [
-        new THREE.Vector3(0, 0.03, -20),
-        new THREE.Vector3(0, 0.03, 20)
-        ];
-        const zAxisGeometry = new THREE.BufferGeometry().setFromPoints(zAxisPoints);
-        const zAxis = new THREE.Line(zAxisGeometry, zAxisMaterial);
-        gridGroup.add(zAxis);
-
-        // 添加中心点标记
-        const centerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-        const centerMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.3
-        });
-        const centerPoint = new THREE.Mesh(centerGeometry, centerMaterial);
-        centerPoint.position.set(0, 0.04, 0);
-        gridGroup.add(centerPoint);
-
-        this.scene.add(gridGroup);
-        this.groundObjects.push(gridGroup);
-        }
-
-        // 创建大理石地面
-        createMarbleGround() {
-        // 创建程序化大理石纹理
-        const canvas = document.createElement('canvas');
-        canvas.width = 1024;
-        canvas.height = 1024;
-        const ctx = canvas.getContext('2d');
-
-        // 创建大理石纹理
-        const baseColor = '#1a1d2b';
-        const veinColor = '#2a2d3b';
-
-        // 填充基础颜色
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // 绘制大理石纹理
-        ctx.strokeStyle = veinColor;
-        ctx.lineWidth = 0.3;
-        ctx.globalAlpha = 0.08;
-
-        // 创建随机纹理线条
-        for (let i = 0; i < 80; i++) {
-        ctx.beginPath();
-        const startX = Math.random() * canvas.width;
-        const startY = Math.random() * canvas.height;
-        ctx.moveTo(startX, startY);
-
-        for (let j = 0; j < 15; j++) {
-        const endX = startX + (Math.random() - 0.5) * 150;
-        const endY = startY + (Math.random() - 0.5) * 150;
-        ctx.lineTo(endX, endY);
-        }
-        ctx.stroke();
-        }
-
-        // 添加一些斑点
-        ctx.fillStyle = veinColor;
-        ctx.globalAlpha = 0.03;
-        for (let i = 0; i < 300; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const radius = Math.random() * 2 + 0.5;
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fill();
-        }
-
-        // 创建纹理
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(8, 8);
-
-        // 创建地面材质
-        const groundMaterial = new THREE.MeshPhongMaterial({
-        map: texture,
-        side: THREE.DoubleSide,
-        shininess: 25,
-        specular: 0x222222
-        });
-
-        const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.1;
-        this.scene.add(ground);
-        this.groundObjects.push(ground);
-
-        // 添加微妙的网格线
-        this.createSubtleGrid();
-        }
-
-        // 创建微妙的网格线
-        createSubtleGrid() {
-        const gridGroup = new THREE.Group();
-        const gridMaterial = new THREE.LineBasicMaterial({
-        color: 0x3a3d4b,
-        transparent: true,
-        opacity: 0.03
-        });
-
-        const gridSize = 1000;
-        const divisions = 50;
-        const step = gridSize / divisions;
-        const halfSize = gridSize / 2;
-
-        for (let i = -divisions/2; i <= divisions/2; i++) {
-        // X方向
-        const xPoints = [
-        new THREE.Vector3(i * step, 0.02, -halfSize),
-        new THREE.Vector3(i * step, 0.02, halfSize)
-        ];
-        const xGeometry = new THREE.BufferGeometry().setFromPoints(xPoints);
-        const xLine = new THREE.Line(xGeometry, gridMaterial);
-        gridGroup.add(xLine);
-
-        // Z方向
-        const zPoints = [
-        new THREE.Vector3(-halfSize, 0.02, i * step),
-        new THREE.Vector3(halfSize, 0.02, i * step)
-        ];
-        const zGeometry = new THREE.BufferGeometry().setFromPoints(zPoints);
-        const zLine = new THREE.Line(zGeometry, gridMaterial);
-        gridGroup.add(zLine);
-        }
-
-        this.scene.add(gridGroup);
-        this.groundObjects.push(gridGroup);
-        }
-
-        // 创建地面反射效果
-        createGroundReflection() {
-        // 创建一个透明的反射平面
-        const reflectionGeometry = new THREE.PlaneGeometry(1000, 1000);
-        const reflectionMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.01,
-        side: THREE.DoubleSide
-        });
-
-        this.groundReflection = new THREE.Mesh(reflectionGeometry, reflectionMaterial);
-        this.groundReflection.rotation.x = -Math.PI / 2;
-        this.groundReflection.position.y = 0.01;
-        this.scene.add(this.groundReflection);
-        this.groundObjects.push(this.groundReflection);
-        }
-
-        // 切换地面类型
-        toggleGroundType() {
-        this.groundType = this.groundType === 'grid' ? 'marble' : 'grid';
-        this.createEnhancedGround();
-
-        // 更新按钮文本
-        const button = document.getElementById('toggle-ground');
-        button.textContent = this.groundType === 'grid' ? '大理石地面' : '网格地面';
-        }
-
-        setupFirstPersonControls() {
-        // 移动状态
-        this.moveState = {
-        forward: false,
-        backward: false,
-        left: false,
-        right: false,
-        run: false
-        };
-
-        // 移动速度
-        this.moveSpeed = {
-        walk: 0.1,
-        run: 0.2
-        };
-
-        // 鼠标控制
-        this.mouse = new THREE.Vector2();
-        this.rotation = {
-        x: 0,
-        y: 0
-        };
-
-        // 锁定指针
-        this.renderer.domElement.addEventListener('click', () => {
-        if (!this.isPointerLocked) {
-        this.renderer.domElement.requestPointerLock();
-        }
-        });
-
-        // 指针锁定变化事件
-        document.addEventListener('pointerlockchange', () => {
-        if (document.pointerLockElement === this.renderer.domElement) {
-        this.isPointerLocked = true;
-        document.addEventListener('mousemove', this.onMouseMove.bind(this));
-        } else {
-        this.isPointerLocked = false;
-        document.removeEventListener('mousemove', this.onMouseMove.bind(this));
-        }
-        });
-
-        // 鼠标右键事件 - 退出指针锁定
-        this.renderer.domElement.addEventListener('mousedown', (event) => {
-        if (event.button === 2) { // 右键的button值是2
-        if (this.isPointerLocked) {
-        document.exitPointerLock();
-        }
-        event.preventDefault(); // 阻止默认行为
-        }
-        });
-
-        // 阻止右键菜单在画布上弹出
-        this.renderer.domElement.addEventListener('contextmenu', (event) => {
-        event.preventDefault();
-        });
-
-        // 键盘事件
-        document.addEventListener('keydown', this.onKeyDown.bind(this));
-        document.addEventListener('keyup', this.onKeyUp.bind(this));
-
-        // 窗口大小调整
-        window.addEventListener('resize', this.onWindowResize.bind(this));
-        }
-
-        onMouseMove(event) {
-        if (!this.isPointerLocked) return;
-
-        this.mouse.x = event.movementX;
-        this.mouse.y = event.movementY;
-
-        // 更新相机旋转
-        this.rotation.x -= this.mouse.y * 0.002;
-        this.rotation.y -= this.mouse.x * 0.002;
-
-        // 限制垂直视角
-        this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
-
-        // 更新相机方向
-        this.camera.rotation.order = 'YXZ';
-        this.camera.rotation.y = this.rotation.y;
-        this.camera.rotation.x = this.rotation.x;
-
-        // 更新移动时间
-        this.updateLastMoveTime();
-        }
-
-        onKeyDown(event) {
-        this.updateLastMoveTime();
-
-        switch(event.code) {
-        case 'KeyW':
-        this.moveState.forward = true;
-        break;
-        case 'KeyS':
-        this.moveState.backward = true;
-        break;
-        case 'KeyA':
-        this.moveState.left = true;
-        break;
-        case 'KeyD':
-        this.moveState.right = true;
-        break;
-        case 'ShiftLeft':
-        this.moveState.run = true;
-        break;
-        case 'Space':
-        this.toggleImmersiveMode();
-        break;
-        case 'Escape':
-        if (document.pointerLockElement) {
-        document.exitPointerLock();
-        }
-        break;
-        case 'ArrowLeft':  // 添加左方向键处理
-        this.seekVideo(-5);  // 快退5秒
-        break;
-        case 'ArrowRight': // 添加右方向键处理
-        this.seekVideo(5);   // 快进5秒
-        break;
-        }
-        }
-
-        onKeyUp(event) {
-        switch(event.code) {
-        case 'KeyW':
-        this.moveState.forward = false;
-        break;
-        case 'KeyS':
-        this.moveState.backward = false;
-        break;
-        case 'KeyA':
-        this.moveState.left = false;
-        break;
-        case 'KeyD':
-        this.moveState.right = false;
-        break;
-        case 'ShiftLeft':
-        this.moveState.run = false;
-        break;
-        }
-        }
-
-        onContextMenu(event) {
-        event.preventDefault(); // 始终阻止默认右键菜单
-
-        // 如果指针已锁定，则退出锁定
-        if (this.isPointerLocked) {
-        document.exitPointerLock();
-        return;
-        }
-        }
-
-
-
-        updateLastMoveTime() {
-        this.lastMoveTime = Date.now();
-
-        // 显示准星
-        if (!this.crosshairVisible) {
-        this.crosshairVisible = true;
-        document.getElementById('crosshair').classList.remove('hidden');
-        }
-        }
-
-        updateMovement() {
-        // 计算移动方向（仅在水平面移动）
-        const direction = new THREE.Vector3();
-        this.camera.getWorldDirection(direction);
-        direction.y = 0; // 禁止垂直方向移动
-        direction.normalize();
-
-        // 计算侧向向量（仅在水平面移动）
-        const sideVector = new THREE.Vector3();
-        sideVector.crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
-
-        // 根据移动状态更新位置
-        const speed = this.moveState.run ? this.moveSpeed.run : this.moveSpeed.walk;
-
-        if (this.moveState.forward) {
-        this.camera.position.add(direction.multiplyScalar(speed));
-        }
-        if (this.moveState.backward) {
-        this.camera.position.add(direction.multiplyScalar(-speed));
-        }
-        if (this.moveState.left) {
-        this.camera.position.add(sideVector.multiplyScalar(speed));
-        }
-        if (this.moveState.right) {
-        this.camera.position.add(sideVector.multiplyScalar(-speed));
-        }
-
-        // 确保人物高度固定为1.7米
-        this.camera.position.y = 1.7;
-
-        // 检查是否需要隐藏准星（3秒不动）
-        if (Date.now() - this.lastMoveTime > 3000 && this.crosshairVisible) {
-        this.crosshairVisible = false;
-        document.getElementById('crosshair').classList.add('hidden');
-        }
-        }
-
-        onWindowResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        toggleImmersiveMode() {
-        this.isImmersive = !this.isImmersive;
-
-        const ui = document.getElementById('ui');
-        const instructions = document.getElementById('instructions');
-        const performanceStats = document.getElementById('performance-stats');
-
-        if (this.isImmersive) {
-        ui.classList.add('hidden');
-        instructions.classList.add('hidden');
-        performanceStats.classList.add('hidden');
-        } else {
-        ui.classList.remove('hidden');
-        instructions.classList.remove('hidden');
-        performanceStats.classList.remove('hidden');
-        }
-        }
-
-        togglePerformanceMode() {
-        this.performanceMode = !this.performanceMode;
-
-        // 更新UI
-        const button = document.getElementById('performance-toggle');
-        button.textContent = this.performanceMode ? '正常模式' : '性能模式';
-
-        // 应用性能模式设置
-        this.applyPerformanceSettings();
-        }
-
-        applyPerformanceSettings() {
-        if (this.performanceMode) {
-        // 性能模式：降低渲染质量
-        this.renderer.setPixelRatio(1);
-        this.maxVisibleMedia = 15;
-        this.viewDistance = 30;
-        this.spawnDistance = 25;
-        this.unloadDistance = 40;
-
-        // 关闭星空和地面效果
-        this.starfieldEnabled = false;
-        this.groundEnabled = false;
-        this.createEnhancedGround();
-        if (this.starLayers.length > 0) {
-        this.starLayers.forEach(layer => this.scene.remove(layer.mesh));
-        this.starLayers = [];
-        }
-        } else {
-        // 正常模式：恢复默认设置
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.maxVisibleMedia = 40;
-        this.viewDistance = 70;
-        this.spawnDistance = 50;
-        this.unloadDistance = 70;
-
-        // 恢复星空和地面效果
-        this.starfieldEnabled = true;
-        this.groundEnabled = true;
-        this.createEnhancedGround();
-        this.createImprovedStarfield();
-        }
-
-        // 重新评估所有媒体的可见性
-        this.evaluateMediaVisibility();
-        }
-
-        setupEventListeners() {
-        const fileInput = document.getElementById('file-input');
-
-        // 文件导入 - 文件夹
-        document.getElementById('import-folder').addEventListener('click', () => {
-        // 设置文件夹选择模式
-        fileInput.setAttribute('webkitdirectory', '');
-        fileInput.setAttribute('directory', '');
-        fileInput.setAttribute('multiple', '');
-        fileInput.accept = 'image/*,video/*'; // 限制文件类型
-        fileInput.click();
-        console.log('文件夹选择模式已激活');
-        });
-
-        // 文件导入 - 单个文件
-        document.getElementById('import-files').addEventListener('click', () => {
-        // 移除文件夹属性，设置为多文件选择
-        fileInput.removeAttribute('webkitdirectory');
-        fileInput.removeAttribute('directory');
-        fileInput.setAttribute('multiple', '');
-        fileInput.accept = 'image/*,video/*'; // 限制文件类型
-        fileInput.click();
-        console.log('文件选择模式已激活');
-        });
-
-        // 文件选择处理
-        fileInput.addEventListener('change', (event) => {
-        const files = event.target.files;
-        console.log('选择的文件数量:', files.length);
-
-        if (files.length > 0) {
-        // 显示文件信息用于调试
-        for (let i = 0; i < Math.min(files.length, 5); i++) {
-        const file = files[i];
-        console.log(`文件 ${i + 1}:`, file.name,
-        '类型:', file.type,
-        '路径:', file.webkitRelativePath || file.name);
-        }
-        if (files.length > 5) {
-        console.log(`... 还有 ${files.length - 5} 个文件`);
-        }
-
-        this.handleFiles(files);
-        } else {
-        console.log('没有选择文件');
-        }
-
-        // 重置input
-        event.target.value = '';
-
-        // 重置文件输入属性
-        fileInput.removeAttribute('webkitdirectory');
-        fileInput.removeAttribute('directory');
-        });
-
-        // 移除所有媒体
-        document.getElementById('remove-all').addEventListener('click', () => {
-        this.removeAllMedia();
-        });
-
-        // 人物复位
-        document.getElementById('reset-position').addEventListener('click', () => {
-        this.resetPosition();
-        });
-
-        // 性能模式切换
-        document.getElementById('performance-toggle').addEventListener('click', () => {
-        this.togglePerformanceMode();
-        });
-
-        // 地面切换
-        document.getElementById('toggle-ground').addEventListener('click', () => {
-        this.toggleGroundType();
-        });
-
-        // 星空切换
-        document.getElementById('toggle-stars').addEventListener('click', () => {
-        this.toggleStarfield();
-        });
-
-        // 视频控制事件
-        this.setupVideoControls();
-
-        // 检查文件夹选择支持
-        this.checkFolderSelectionSupport();
-
-        // 添加全屏切换
-        document.addEventListener('keydown', (e) => {
-        if (e.code === 'F11') {
-        e.preventDefault();
-        if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-        } else {
-        document.exitFullscreen();
-        }
-        }
-        });
-        }
-
-        // 添加文件夹选择支持检查
-        checkFolderSelectionSupport() {
-        const fileInput = document.getElementById('file-input');
-        const folderButton = document.getElementById('import-folder');
-
-        if (!fileInput.webkitdirectory && !fileInput.directory) {
-        console.warn('浏览器不支持文件夹选择');
-        folderButton.style.opacity = '0.5';
-        folderButton.title = '您的浏览器不支持文件夹选择功能';
-        folderButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        alert('您的浏览器不支持文件夹选择功能。请使用Chrome、Edge或Firefox等现代浏览器。');
-        });
-        } else {
-        console.log('浏览器支持文件夹选择');
-        }
-        }
-
-        setupVideoControls() {
-        const playPauseBtn = document.getElementById('play-pause-btn');
-        const muteBtn = document.getElementById('mute-btn');
-        const progressSlider = document.getElementById('progress-slider');
-        const volumeSlider = document.getElementById('volume-slider');
-
-        playPauseBtn.addEventListener('click', () => {
-        if (this.currentlyPlaying && this.currentlyPlaying.element) {
-        if (this.currentlyPlaying.isPlaying) {
-        this.pauseMedia(this.currentlyPlaying);
-        playPauseBtn.textContent = '播放';
-        } else {
-        this.playMedia(this.currentlyPlaying);
-        playPauseBtn.textContent = '暂停';
-        }
-        }
-        });
-
-        muteBtn.addEventListener('click', () => {
-        if (this.currentlyPlaying && this.currentlyPlaying.element) {
-        this.currentlyPlaying.element.muted = !this.currentlyPlaying.element.muted;
-        muteBtn.textContent = this.currentlyPlaying.element.muted ? '取消静音' : '静音';
-        }
-        });
-
-        // 进度条控制
-        progressSlider.addEventListener('click', (e) => {
-        if (this.currentlyPlaying && this.currentlyPlaying.element) {
-        const rect = progressSlider.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
-        this.currentlyPlaying.element.currentTime = percent * this.currentlyPlaying.element.duration;
-        }
-        });
-
-        // 音量控制
-        volumeSlider.addEventListener('click', (e) => {
-        if (this.currentlyPlaying && this.currentlyPlaying.element) {
-        const rect = volumeSlider.getBoundingClientRect();
-        const volume = (e.clientX - rect.left) / rect.width;
-        this.currentlyPlaying.element.volume = Math.max(0, Math.min(1, volume));
-        this.updateVideoControlsUI();
-        }
-        });
-        }
-
-        updateVideoControlsUI() {
-        if (!this.currentlyPlaying || !this.currentlyPlaying.element) return;
-
-        const video = this.currentlyPlaying.element;
-        const progressBar = document.getElementById('progress-bar');
-        const progressHandle = document.getElementById('progress-handle');
-        const volumeBar = document.getElementById('volume-bar');
-        const volumeHandle = document.getElementById('volume-handle');
-        const playPauseBtn = document.getElementById('play-pause-btn');
-        const muteBtn = document.getElementById('mute-btn');
-
-        // 更新进度条
-        if (video.duration) {
-        const progressPercent = (video.currentTime / video.duration) * 100;
-        progressBar.style.width = `${progressPercent}%`;
-        progressHandle.style.left = `${progressPercent}%`;
-        }
-
-        // 更新音量条
-        const volumePercent = video.volume * 100;
-        volumeBar.style.width = `${volumePercent}%`;
-        volumeHandle.style.left = `${volumePercent}%`;
-
-        // 更新按钮状态
-        playPauseBtn.textContent = video.paused ? '播放' : '暂停';
-        muteBtn.textContent = video.muted ? '取消静音' : '静音';
-        }
-
-        showVideoControls() {
-        this.videoControlsVisible = true;
-        document.getElementById('video-controls').classList.remove('hidden');
-        this.updateVideoControlsUI();
-        }
-
-        hideVideoControls() {
-        this.videoControlsVisible = false;
-        document.getElementById('video-controls').classList.add('hidden');
-        }
-
-        handleFiles(files) {
-        console.log('开始处理文件，总数:', files.length);
-
-        let supportedCount = 0;
-        let unsupportedCount = 0;
-        let imageCount = 0;
-        let videoCount = 0;
-        let gifCount = 0;
-
-        // 清空加载队列
-        this.loadingQueue = [];
-
-        for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileType = file.type.split('/')[0];
-
-        // 支持的文件类型
-        const isImage = fileType === 'image';
-        const isVideo = fileType === 'video';
-        const isGif = file.type === 'image/gif';
-
-        if (isImage || isVideo) {
-        this.loadingQueue.push(file);
-        supportedCount++;
-
-        if (isImage) imageCount++;
-        if (isVideo) videoCount++;
-        if (isGif) gifCount++;
-        } else {
-        console.log(`跳过不支持的文件: ${file.name} (${file.type})`);
-        unsupportedCount++;
-        }
-        }
-
-        // 设置加载参数
-        this.totalToLoad = supportedCount;
-        this.loadedCount = 0;
-
-        // 显示加载界面
-        this.showLoadingOverlay();
-
-        // 开始处理队列
-        this.processLoadingQueue();
-
-        console.log(`处理完成: ${supportedCount} 个支持的文件 (${imageCount} 图片, ${videoCount} 视频, ${gifCount} GIF), ${unsupportedCount} 个不支持的文件`);
-
-        // 显示处理结果
-        if (supportedCount > 0) {
-        const message = `成功导入 ${supportedCount} 个媒体文件\n` +
-        `- 图片: ${imageCount}\n` +
-        `- 视频: ${videoCount}\n` +
-        `- GIF: ${gifCount}`;
-        console.log(message);
-        } else if (files.length > 0) {
-        alert('没有找到支持的图片或视频文件。\n请选择 JPEG、PNG、GIF 图片或 MP4、WebM 视频文件。');
-        }
-        }
-
-        showLoadingOverlay() {
-        const overlay = document.getElementById('loading-overlay');
-        const loadingText = document.getElementById('loading-text');
-        const loadingBar = document.getElementById('loading-bar');
-
-        loadingText.textContent = '正在加载媒体文件...';
-        loadingBar.style.width = '0%';
-        overlay.classList.remove('hidden');
-        }
-
-        hideLoadingOverlay() {
-        const overlay = document.getElementById('loading-overlay');
-        overlay.classList.add('hidden');
-        }
-
-        updateLoadingProgress() {
-        const progress = (this.loadedCount / this.totalToLoad) * 100;
-        const loadingBar = document.getElementById('loading-bar');
-        const loadingText = document.getElementById('loading-text');
-
-        loadingBar.style.width = `${progress}%`;
-        loadingText.textContent = `正在加载媒体文件... ${this.loadedCount}/${this.totalToLoad}`;
-
-        if (this.loadedCount >= this.totalToLoad) {
-        setTimeout(() => {
-        this.hideLoadingOverlay();
-        }, 500);
-        }
-        }
-
-        processLoadingQueue() {
-        if (this.loadingQueue.length === 0) {
-        this.isLoading = false;
-        return;
-        }
-
-        this.isLoading = true;
-
-        // 每次处理5个文件，避免阻塞主线程
-        const batchSize = 5;
-        const batch = this.loadingQueue.splice(0, batchSize);
-
-        let processedInBatch = 0;
-
-        batch.forEach(file => {
-        this.createMediaObject(file, () => {
-        processedInBatch++;
-        this.loadedCount++;
-        this.updateLoadingProgress();
-
-        if (processedInBatch >= batch.length) {
-        // 继续处理下一批
-        setTimeout(() => {
-        this.processLoadingQueue();
-        }, 0);
-        }
-        });
-        });
-        }
-
-        createMediaObject(file, onLoadComplete) {
-        // 检查是否超过最大媒体数量限制
-        if (this.mediaObjects.length >= this.maxMediaObjects) {
-        // 找到最远的媒体对象进行替换
-        this.unloadFarthestMedia();
-        }
-
-        const fileType = file.type.split('/')[0];
-        const fileExtension = file.name.split('.').pop().toUpperCase();
-
-        // 创建媒体对象
-        const mediaObject = {
-        file: file,
-        type: fileType,
-        extension: fileExtension,
-        element: null,
-        texture: null,
-        mesh: null,
-        isPlaying: false,
-        isVideo: fileType === 'video',
-        isGif: file.type === 'image/gif',
-        labelMesh: null,
-        lastSeen: Date.now(),
-        distance: 0,
-        gridKey: null,
-        isVisible: false
-        };
-
-        // 创建媒体平面 - 使用简约材质
-        const geometry = new THREE.PlaneGeometry(1, 1);
-        const material = new THREE.MeshBasicMaterial({
-        side: THREE.DoubleSide, // 正反面亮度一致
-        transparent: true
-        });
-
-        const mesh = new THREE.Mesh(geometry, material);
-
-        // 初始位置设置为远离视野
-        mesh.position.set(1000, 0, 1000);
-
-        // 设置媒体高度
-        mesh.position.y = 1.85; // 0.3米距地面 + 1.7米人物高度的一半
-
-        this.scene.add(mesh);
-        mediaObject.mesh = mesh;
-
-        // 加载媒体内容
-        this.loadMediaContent(mediaObject, onLoadComplete);
-
-        this.mediaObjects.push(mediaObject);
-
-        // 更新媒体计数显示
-        this.updatePerformanceStats();
-        }
-
-        // 获取网格键值
-        getGridKey(position) {
-        const gridX = Math.round(position.x / this.gridSize);
-        const gridZ = Math.round(position.z / this.gridSize);
-        return `${gridX},${gridZ}`;
-        }
-
-        // 检查位置是否可用
-        isPositionAvailable(position) {
-        const gridKey = this.getGridKey(position);
-
-        // 检查是否已被占用
-        if (this.occupiedGrids.has(gridKey)) {
-        return false;
-        }
-
-        // 检查是否与其他可见媒体距离过近
-        for (const obj of this.visibleMedia) {
-        if (obj.mesh && position.distanceTo(obj.mesh.position) < this.minSpacing) {
-        return false;
-        }
-        }
-
-        return true;
-        }
-
-        // 获取可用的随机位置
-        getAvailableRandomPosition() {
-        const cameraPos = this.camera.position;
-        const attempts = 50;
-
-        for (let i = 0; i < attempts; i++) {
-        // 在生成距离范围内随机位置
-        const angle = Math.random() * Math.PI * 2;
-        const distance = this.spawnDistance * 0.7 + Math.random() * this.spawnDistance * 0.3;
-
-        const position = new THREE.Vector3(
-        cameraPos.x + Math.cos(angle) * distance,
-        0,
-        cameraPos.z + Math.sin(angle) * distance
-        );
-
-        if (this.isPositionAvailable(position)) {
-        return position;
-        }
-        }
-
-        // 如果找不到合适位置，返回null
-        return null;
-        }
-
-        // 动态生成媒体
-        spawnMedia() {
-        const now = Date.now();
-
-        // 控制生成频率
-        if (now - this.lastSpawnCheck < this.spawnInterval) {
-        return;
-        }
-
-        this.lastSpawnCheck = now;
-
-        // 如果可见媒体数量已达上限，不生成新媒体
-        if (this.visibleMedia.length >= this.maxVisibleMedia) {
-        return;
-        }
-
-        // 查找未显示的媒体
-        const availableMedia = this.mediaObjects.filter(obj =>
-        !obj.isVisible && obj.mesh && obj.texture
-        );
-
-        if (availableMedia.length === 0) {
-        return;
-        }
-
-        // 随机选择一个媒体
-        const mediaObject = availableMedia[Math.floor(Math.random() * availableMedia.length)];
-
-        // 获取可用位置
-        const position = this.getAvailableRandomPosition();
-
-        if (position) {
-        // 设置位置
-        mediaObject.mesh.position.copy(position);
-        mediaObject.mesh.position.y = 1.85;
-
-        // 媒体朝向相机
-        const direction = new THREE.Vector3();
-        direction.subVectors(this.camera.position, mediaObject.mesh.position);
-        direction.y = 0; // 只在水平面旋转
-        mediaObject.mesh.lookAt(
-        mediaObject.mesh.position.x + direction.x,
-        mediaObject.mesh.position.y,
-        mediaObject.mesh.position.z + direction.z
-        );
-
-        // 标记为可见
-        mediaObject.isVisible = true;
-        mediaObject.mesh.visible = true;
-        if (mediaObject.labelMesh) mediaObject.labelMesh.visible = true;
-
-        // 记录网格占用
-        const gridKey = this.getGridKey(position);
-        mediaObject.gridKey = gridKey;
-        this.occupiedGrids.add(gridKey);
-
-        // 添加到可见媒体列表
-        this.visibleMedia.push(mediaObject);
-        }
-        }
-
-        loadMediaContent(mediaObject, onLoadComplete) {
-        const file = mediaObject.file;
-        const mesh = mediaObject.mesh;
-
-        if (mediaObject.type === 'image') {
-        if (mediaObject.isGif) {
-        // 处理GIF
-        this.loadGif(mediaObject, onLoadComplete);
-        } else {
-        // 处理静态图片
-        const reader = new FileReader();
-
-        reader.onload = (event) => {
-        const img = new Image();
-
-        img.onload = () => {
-        // 根据图片比例调整大小
-        const aspect = img.width / img.height;
-        const height = 3.2; // 3.5米顶边高度 - 0.3米距地面
-        const width = height * aspect;
-
-        mesh.scale.set(width, height, 1);
-
-        // 创建纹理
-        const texture = new THREE.Texture(img);
-        texture.needsUpdate = true;
-
-        mediaObject.texture = texture;
-        mesh.material.map = texture;
-        mesh.material.needsUpdate = true;
-
-        // 添加扩展名标签
-        this.addExtensionLabel(mediaObject);
-
-        // 调用完成回调
-        if (onLoadComplete) onLoadComplete();
-        };
-
-        img.src = event.target.result;
-        };
-
-        reader.readAsDataURL(file);
-        }
-        } else if (mediaObject.type === 'video') {
-        // 处理视频
-        const video = document.createElement('video');
-        video.src = URL.createObjectURL(file);
-        video.loop = true;
-        video.muted = false; // 取消静音
-        video.volume = 0.5; // 默认音量
-        video.playsInline = true;
-
-        mediaObject.element = video;
-
-        video.onloadedmetadata = () => {
-        // 根据视频比例调整大小
-        const aspect = video.videoWidth / video.videoHeight;
-        const height = 3.2; // 3.5米顶边高度 - 0.3米距地面
-        const width = height * aspect;
-
-        mesh.scale.set(width, height, 1);
-
-        // 创建视频纹理
-        const texture = new THREE.VideoTexture(video);
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.format = THREE.RGBFormat;
-
-        mediaObject.texture = texture;
-        mesh.material.map = texture;
-        mesh.material.needsUpdate = true;
-
-        // 添加扩展名标签
-        this.addExtensionLabel(mediaObject);
-
-        // 调用完成回调
-        if (onLoadComplete) onLoadComplete();
-        };
-
-        // 视频加载错误处理
-        video.onerror = () => {
-        console.error('视频加载失败:', file.name);
-        if (onLoadComplete) onLoadComplete();
-        };
-        }
-        }
-
-        loadGif(mediaObject, onLoadComplete) {
-        const file = mediaObject.file;
-        const mesh = mediaObject.mesh;
-
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-
-        img.onload = () => {
-        // 根据GIF比例调整媒体大小
-        const aspect = img.width / img.height;
-        const height = 3.2;
-        const width = height * aspect;
-
-        mesh.scale.set(width, height, 1);
-
-        // 直接创建静态纹理
-        const texture = new THREE.Texture(img);
-        texture.needsUpdate = true;
-
-        mediaObject.texture = texture;
-        mesh.material.map = texture;
-        mesh.material.needsUpdate = true;
-
-        // 标记为静态图片，不处理播放
-        mediaObject.isPlaying = false;
-
-        console.log('GIF加载为静态图片:', file.name);
-
-        // 添加扩展名标签
-        this.addExtensionLabel(mediaObject);
-
-        URL.revokeObjectURL(url);
-
-        // 调用完成回调
-        if (onLoadComplete) onLoadComplete();
-        };
-
-        img.src = url;
-
-        // GIF加载错误处理
-        img.onerror = () => {
-        console.error('GIF加载失败:', file.name);
-        if (onLoadComplete) onLoadComplete();
-        };
-        }
-
-        addExtensionLabel(mediaObject) {
-        // 创建扩展名标签
-        const canvas = document.createElement('canvas');
-        const resolutionScale = 2; // 提高分辨率
-
-        const text = mediaObject.extension;
-        const textLength = text.length;
-
-        canvas.width = Math.max(256, textLength * 40)* resolutionScale; // 根据文字长度调整
-        canvas.height = 96 * resolutionScale;
-
-        const context = canvas.getContext('2d');
-
-        // 简约背景
-        context.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-
-        // 添加简约边框
-        context.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        context.lineWidth = 2 * resolutionScale;
-        context.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
-
-        context.font = `bold ${36 * resolutionScale}px Inter`;
-        context.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(text, canvas.width / 2, canvas.height / 2);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-
-        const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        side: THREE.DoubleSide
-        });
-
-        // 根据canvas比例计算标签大小
-        const labelAspect = canvas.width / canvas.height;
-        const labelHeight = 0.15; // 固定高度
-        const labelWidth = labelHeight * labelAspect; // 按比例计算宽度
-
-        const geometry = new THREE.PlaneGeometry(labelWidth, labelHeight);
-        const labelMesh = new THREE.Mesh(geometry, material);
-
-        // 位置计算
-        labelMesh.position.y = 0.6; // 媒体上方固定位置
-        labelMesh.position.z = 0.02;
-
-        mediaObject.mesh.add(labelMesh);
-        mediaObject.labelMesh = labelMesh;
-        }
-
-        // 创建打赏二维码
-        createDonationQRCode() {
-        const textureLoader = new THREE.TextureLoader();
-
-        // 加载二维码图片
-        textureLoader.load('./打赏二维码.jpg', (texture) => {
-        this.createQRCodeWithTexture(texture);
-        }, undefined, (error) => {
-        console.error('加载打赏二维码失败:', error);
-        // 如果加载失败，创建一个替代的简约平面
-        this.createFallbackQRCode();
-        });
-        }
-
-        // 修改后的创建带纹理的二维码
-        createQRCodeWithTexture(texture) {
-        // 创建二维码平面
-        const qrGeometry = new THREE.PlaneGeometry(2, 2); // 2米x2米大小
-        const qrMaterial = new THREE.MeshBasicMaterial({
-        map: texture,
-        side: THREE.FrontSide,
-        transparent: true
-        });
-
-        const qrMesh = new THREE.Mesh(qrGeometry, qrMaterial);
-
-        // 修正：放置在出生点身后2米处（Z轴为负值）
-        qrMesh.position.set(0, 1.7, 2);
-
-        this.scene.add(qrMesh);
-        this.donationQR = qrMesh;
-
-        // 创建文字标签数组
-        this.donationTexts = [];
-
-        // 创建上方的文字标签
-        const topText = this.createFloatingText('如果觉得还不错，不妨请开发者喝杯饮料吧！',
-        new THREE.Vector3(0, 1.3, 0));
-        this.donationTexts.push(topText);
-
-        // 创建下方的文字标签
-        const bottomText = this.createFloatingText('扫描二维码打赏',
-        new THREE.Vector3(0, -1.3, 0));
-        this.donationTexts.push(bottomText);
-
-        console.log('打赏二维码和文字标签已创建');
-        }
-
-        // 修改后的创建纯文字标签函数
-        createFloatingText(text, position) {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-
-        // 设置字体和测量文字
-        const fontSize = 60;
-        context.font = `600 ${fontSize}px Inter`;
-        const textMetrics = context.measureText(text);
-        const textWidth = textMetrics.width;
-
-        // 设置canvas尺寸（包含内边距）
-        const padding = 40;
-        const canvasWidth = Math.ceil(textWidth + padding * 2);
-        const canvasHeight = Math.ceil(fontSize * 1.5);
-
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-
-        // 重新设置字体和样式
-        context.font = `600 ${fontSize}px Inter`;
-        context.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-
-        // 透明背景
-        context.clearRect(0, 0, canvas.width, canvas.height);
-
-        // 绘制文字
-        context.fillText(text, canvas.width / 2, canvas.height / 2);
-
-        // 创建3D文字平面
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-
-        const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        side: THREE.FrontSide,
-        transparent: true,
-        depthTest: false  // 禁用深度测试，确保文字始终可见
-        });
-
-        // 根据文字长度调整3D平面大小
-        const aspectRatio = canvasWidth / canvasHeight;
-        const height3D = 0.3; // 文字高度
-        const width3D = height3D * aspectRatio;
-
-        const geometry = new THREE.PlaneGeometry(width3D, height3D);
-        const textMesh = new THREE.Mesh(geometry, material);
-
-        // 设置位置（相对于二维码）
-        textMesh.position.copy(position);
-
-        // 添加到场景
-        this.scene.add(textMesh);
-
-        return textMesh;
-        }
-
-        // 备用方案：如果二维码图片加载失败，创建一个简约替代品
-        createFallbackQRCode() {
-        // 创建替代纹理
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        const size = 512;
-
-        canvas.width = size;
-        canvas.height = size;
-
-        // 深色背景
-        context.fillStyle = '#1a1d2b';
-        context.fillRect(0, 0, size, size);
-
-        // 白色边框和文字
-        context.strokeStyle = '#ffffff';
-        context.lineWidth = 8;
-        context.strokeRect(20, 20, size - 40, size - 40);
-
-        context.fillStyle = '#ffffff';
-        context.font = 'bold 60px Inter';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText('二维码加载失败', size / 2, size / 2 - 30);
-        context.fillText('请检查图片文件', size / 2, size / 2 + 30);
-
-        // 创建纹理
-        const texture = new THREE.CanvasTexture(canvas);
-
-        // 使用相同的创建方法
-        this.createQRCodeWithTexture(texture);
-
-        console.log('创建了替代二维码平面');
-        }
-
-        playMedia(mediaObject) {
-        console.log('播放媒体:', mediaObject.file.name);
-
-        if (mediaObject.type === 'video') {
-        mediaObject.element.play().then(() => {
-        mediaObject.isPlaying = true;
-        });
-        }
-        }
-
-        pauseMedia(mediaObject) {
-        console.log('暂停媒体:', mediaObject.file.name);
-
-        if (mediaObject.type === 'video') {
-        mediaObject.element.pause();
-        mediaObject.isPlaying = false;
-        }
-        }
-
-        removeAllMedia() {
-        for (const mediaObject of this.mediaObjects) {
-        this.unloadMedia(mediaObject);
-        }
-
-        this.mediaObjects = [];
-        this.visibleMedia = [];
-        this.occupiedGrids.clear();
-        this.currentlyPlaying = null;
-        this.hideVideoControls();
-
-        // 更新性能统计
-        this.updatePerformanceStats();
-        }
-
-        unloadMedia(mediaObject) {
-        if (mediaObject.mesh) {
-        this.scene.remove(mediaObject.mesh);
-        }
-
-        if (mediaObject.element && mediaObject.type === 'video') {
-        mediaObject.element.pause();
-        URL.revokeObjectURL(mediaObject.element.src);
-        }
-
-        // 释放纹理内存
-        if (mediaObject.texture) {
-        mediaObject.texture.dispose();
-        }
-
-        // 释放标签纹理
-        if (mediaObject.labelMesh && mediaObject.labelMesh.material.map) {
-        mediaObject.labelMesh.material.map.dispose();
-        }
-        }
-
-        unloadFarthestMedia() {
-        if (this.mediaObjects.length === 0) return;
-
-        // 找到最远的媒体（排除当前播放的媒体）
-        let farthestIndex = -1;
-        let maxDistance = -1;
-
-        for (let i = 0; i < this.mediaObjects.length; i++) {
-        const obj = this.mediaObjects[i];
-        if (obj !== this.currentlyPlaying && obj.distance > maxDistance) {
-        maxDistance = obj.distance;
-        farthestIndex = i;
-        }
-        }
-
-        // 如果找到了最远的媒体，卸载它
-        if (farthestIndex >= 0) {
-        console.log(`卸载最远媒体: ${this.mediaObjects[farthestIndex].file.name}, 距离: ${maxDistance.toFixed(2)}米`);
-        this.unloadMedia(this.mediaObjects[farthestIndex]);
-        this.mediaObjects.splice(farthestIndex, 1);
-        }
-        }
-
-        evaluateMediaVisibility() {
-        const cameraPos = this.camera.position;
-
-        // 更新所有媒体的距离
-        this.mediaObjects.forEach(obj => {
-        if (obj.mesh) {
-        obj.distance = cameraPos.distanceTo(obj.mesh.position);
-        }
-        });
-
-        // 检查需要隐藏的媒体
-        for (let i = this.visibleMedia.length - 1; i >= 0; i--) {
-        const obj = this.visibleMedia[i];
-
-        // 如果媒体距离过远或不在视野内，隐藏它
-        if (obj.distance > this.viewDistance || !obj.isVisible) {
-        this.hideMedia(obj);
-        this.visibleMedia.splice(i, 1);
-        }
-        }
-
-        // 动态生成新媒体
-        this.spawnMedia();
-        }
-
-        hideMedia(mediaObject) {
-        if (mediaObject.mesh) {
-        // 移出视野
-        mediaObject.mesh.position.set(1000, 0, 1000);
-        mediaObject.mesh.visible = false;
-
-        // 释放网格占用
-        if (mediaObject.gridKey) {
-        this.occupiedGrids.delete(mediaObject.gridKey);
-        mediaObject.gridKey = null;
-        }
-
-        // 标记为不可见
-        mediaObject.isVisible = false;
-
-        // 如果是视频且正在播放，暂停它
-        if (mediaObject.isVideo && mediaObject.isPlaying && mediaObject !== this.currentlyPlaying) {
-        this.pauseMedia(mediaObject);
-        }
-        }
-        }
-
-        resetPosition() {
-        this.camera.position.set(0, 1.7, 0);
-        this.rotation.x = 0;
-        this.rotation.y = 0;
-        this.camera.rotation.set(0, 0, 0);
-
-        // 重置所有媒体的可见性
-        this.visibleMedia.forEach(obj => {
-        this.hideMedia(obj);
-        });
-        this.visibleMedia = [];
-        this.occupiedGrids.clear();
-
-        // 确保二维码保持在身后位置
-        if (this.donationQR) {
-        this.donationQR.position.set(0, 1.7, 2);
-        // 重置二维码旋转
-        this.donationQR.rotation.set(0, 0, 0);
-        }
-        }
-
-        // 射线检测，用于交互
-        checkIntersections() {
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-
-        const intersects = raycaster.intersectObjects(
-        this.visibleMedia
-        .map(obj => obj.mesh)
-        .filter(mesh => mesh && mesh.visible) // 只检查可见的媒体
-        );
-
-        // 清除之前的点击事件
-        this.renderer.domElement.onclick = null;
-        document.body.style.cursor = 'default';
-
-        if (intersects.length > 0) {
-        const mediaObject = this.visibleMedia.find(
-        obj => obj.mesh === intersects[0].object
-        );
-
-        if (mediaObject) {
-        // 检查是否在5米范围内
-        const distance = this.camera.position.distanceTo(mediaObject.mesh.position);
-
-        if (distance <= 5) {
-        // 可以交互
-        document.body.style.cursor = 'pointer';
-
-        // 直接绑定点击事件到当前媒体对象
-        this.renderer.domElement.onclick = () => {
-        console.log('点击媒体:', mediaObject.file.name, '类型:', mediaObject.type);
-        this.handleMediaInteraction(mediaObject);
-        };
-
-        console.log('可交互媒体:', mediaObject.file.name, '距离:', distance.toFixed(2));
-        } else {
-        console.log('媒体距离过远:', mediaObject.file.name, '距离:', distance.toFixed(2));
-        }
-        }
-        }
-        }
-
-        // 修改媒体交互处理
-        handleMediaInteraction(mediaObject) {
-        console.log('处理媒体交互:', mediaObject.file.name);
-
-        // 如果点击的是当前正在播放的媒体，则暂停
-        if (mediaObject === this.currentlyPlaying) {
-        console.log('暂停当前媒体');
-        this.pauseMedia(mediaObject);
-        this.currentlyPlaying = null;
-        this.hideVideoControls();
-        return;
-        }
-
-        // 暂停当前播放的媒体
-        if (this.currentlyPlaying) {
-        console.log('暂停之前播放的媒体:', this.currentlyPlaying.file.name);
-        this.pauseMedia(this.currentlyPlaying);
-        }
-
-        // 只播放视频，GIF作为静态图片不播放
-        if (mediaObject.isVideo) {
-        console.log('播放视频:', mediaObject.file.name);
-        this.playMedia(mediaObject);
-        this.currentlyPlaying = mediaObject;
-        this.showVideoControls();
-        } else {
-        // GIF和静态图片不播放，只标记为当前选中
-        this.currentlyPlaying = mediaObject;
-        this.hideVideoControls();
-        console.log('选中静态媒体:', mediaObject.file.name);
-        }
-        }
-
-        startPerformanceMonitoring() {
-        // 每秒更新一次性能统计
-        setInterval(() => {
-        this.updatePerformanceStats();
-        }, 1000);
-        }
-
-        updatePerformanceStats() {
-        // 更新媒体数量
-        document.getElementById('media-count').textContent = this.mediaObjects.length;
-        document.getElementById('visible-count').textContent = this.visibleMedia.length;
-
-        // 更新内存使用情况（估算）
-        let memoryUsage = 0;
-        this.mediaObjects.forEach(obj => {
-        if (obj.texture) {
-        // 估算纹理内存使用
-        if (obj.isVideo) {
-        memoryUsage += 10; // 视频纹理估计10MB
-        } else {
-        memoryUsage += 5; // 图片纹理估计5MB
-        }
-        }
-        });
-
-        document.getElementById('memory-usage').textContent = memoryUsage.toFixed(1);
-
-        // 更新FPS
-        document.getElementById('fps-counter').textContent = this.fps;
-        }
-
-        animate() {
-        requestAnimationFrame(() => this.animate());
-
-        // 更新移动
-        this.updateMovement();
-
-        // 更新媒体可见性
-        this.evaluateMediaVisibility();
-
-        // 更新媒体
-        for (const mediaObject of this.visibleMedia) {
-
-        // 更新视频控制界面
-        if (mediaObject.type === 'video' && mediaObject.isPlaying) {
-        this.updateVideoControlsUI();
-        }
-        }
-
-        // 更新星空效果
-        this.updateStarfield();
-
-        // 检查交互
-        this.checkIntersections();
-
-        // 更新二维码旋转，使其面向相机（仅跟随垂直旋转）
-        if (this.donationQR) {
-        // 获取相机旋转的Y分量（水平旋转）
-        const cameraYRotation = this.camera.rotation.y;
-
-        // 设置二维码的旋转，使其面向相机
-        this.donationQR.rotation.y = cameraYRotation;
-
-        // 更新文字标签的位置和旋转
-        if (this.donationTexts && this.donationTexts.length > 0) {
-        // 获取二维码的世界位置
-        const qrWorldPosition = new THREE.Vector3();
-        this.donationQR.getWorldPosition(qrWorldPosition);
-
-        // 更新每个文字标签
-        this.donationTexts.forEach((textMesh, index) => {
-        if (textMesh) {
-        // 计算文字标签的位置（相对于二维码）
-        const offsetY = index === 0 ? 1.3 : -1.3; // 上方或下方
-        const offsetZ = 0.1; // 稍微向前突出
-
-        // 计算旋转后的偏移位置
-        const offset = new THREE.Vector3(0, offsetY, offsetZ);
-        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYRotation);
-
-        // 设置文字标签位置
-        textMesh.position.copy(qrWorldPosition).add(offset);
-
-        // 设置文字标签旋转：只跟随相机的Y轴旋转
-        textMesh.rotation.set(0, cameraYRotation, 0);
-
-        // 确保文字标签始终面向相机（水平方向）
-        textMesh.lookAt(
-        textMesh.position.x + Math.sin(cameraYRotation),
-        textMesh.position.y,
-        textMesh.position.z + Math.cos(cameraYRotation)
-        );
-        }
-        });
-        }
-        }
-
-        // 渲染场景
-        this.renderer.render(this.scene, this.camera);
-
-        // 计算FPS
-        this.frameCount++;
-        const now = performance.now();
-        if (now >= this.lastFpsUpdate + 1000) {
-        this.fps = Math.round((this.frameCount * 1000) / (now - this.lastFpsUpdate));
-        this.frameCount = 0;
-        this.lastFpsUpdate = now;
-        }
-        }
-        }
-
-        // 初始化应用
-        let app = null;
-
-        window.addEventListener('DOMContentLoaded', () => {
-        // 显示开屏界面，等待用户点击开始
-        const splashScreen = document.getElementById('splash-screen');
-        const startButton = document.getElementById('start-button');
-
-        startButton.addEventListener('click', () => {
-        // 隐藏开屏界面
-        splashScreen.classList.add('hidden');
-
-        // 初始化应用
-        app = new VirtualMediaSpace();
-        });
-
-        // 可选：添加键盘快捷键跳过介绍
-        document.addEventListener('keydown', (e) => {
-        if (e.code === 'Enter' || e.code === 'Space') {
-        if (!app && !splashScreen.classList.contains('hidden')) {
-        splashScreen.classList.add('hidden');
-        app = new VirtualMediaSpace();
-        }
-        }
-        });
-        });
-    </script>
+	<script>
+		// 主应用程序类 - 简约现代版
+		class VirtualMediaSpace {
+		constructor() {
+		this.scene = null;
+		this.camera = null;
+		this.renderer = null;
+		this.controls = null;
+
+		this.mediaObjects = []; // 所有媒体对象
+		this.visibleMedia = []; // 当前可见的媒体对象
+		this.mediaPool = []; // 媒体池，用于复用
+		this.currentlyPlaying = null;
+
+		this.isImmersive = false;
+		this.lastMoveTime = Date.now();
+		this.crosshairVisible = true;
+		this.isPointerLocked = false;
+
+		this.videoControlsVisible = false;
+
+		// 性能优化相关属性
+		this.performanceMode = false;
+		this.loadingQueue = [];
+		this.isLoading = false;
+		this.loadedCount = 0;
+		this.totalToLoad = 0;
+		this.frameCount = 0;
+		this.lastFpsUpdate = 0;
+		this.fps = 0;
+
+		// 动态分布相关属性 - 修改为无序加载方式
+		this.viewDistance = 70; // 可视距离
+		this.spawnDistance = 70; // 生成距离（最远）
+		this.minDistance = 10; // 最近生成距离
+		this.minSpacing = 9; // 最小间距（米）
+		this.maxVisibleMedia = 40; // 最大可见媒体数量
+		this.gridSize = this.minSpacing; // 网格大小
+		this.occupiedGrids = new Set(); // 已占用的网格位置
+		this.lastSpawnCheck = 0;
+		this.spawnInterval = 500; // 生成检查间隔（毫秒）
+		this.donationQR = null; // 打赏二维码对象
+
+		// 内存管理
+		this.maxMediaObjects = 2000; // 最大媒体对象数量
+		this.unloadDistance = 70; // 卸载距离（米）
+
+		// 星空粒子
+		this.stars = null;
+		this.twinklingStars = null;
+		this.starLayers = [];
+		this.starfieldEnabled = true;
+		this.time = 0; // 用于星空动画的时间变量
+
+		// 地面相关
+		this.groundEnabled = true;
+		this.groundType = 'grid'; // 'grid' 或 'marble'
+		this.groundObjects = [];
+		this.groundReflection = null;
+
+		// 视频控制相关
+		this.currentlyPlaying = null;
+		this.videoControlsVisible = false;
+
+		this.init();
+		this.setupEventListeners();
+		this.animate();
+		this.startPerformanceMonitoring();
+		}
+
+		// 视频快进快退方法
+		seekVideo(seconds) {
+		if (this.currentlyPlaying &&
+		this.currentlyPlaying.element &&
+		this.currentlyPlaying.type === 'video') {
+
+		const video = this.currentlyPlaying.element;
+
+		// 计算新的时间
+		let newTime = video.currentTime + seconds;
+
+		// 确保时间在有效范围内
+		newTime = Math.max(0, Math.min(newTime, video.duration));
+
+		// 设置新的时间
+		video.currentTime = newTime;
+
+		// 更新视频控制UI
+		this.updateVideoControlsUI();
+
+		// 显示操作提示（可选）
+		this.showSeekFeedback(seconds);
+
+		console.log(`视频 ${seconds > 0 ? '快进' : '快退'} ${Math.abs(seconds)} 秒，新时间: ${newTime.toFixed(1)}/${video.duration.toFixed(1)}`);
+		}
+		}
+
+		init() {
+		// 创建场景
+		this.scene = new THREE.Scene();
+		this.scene.background = new THREE.Color(0x0a0b14);
+
+		// 创建相机
+		this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+		this.camera.position.y = 1.7; // 设置人物高度为1.7米
+
+		// 创建渲染器
+		this.renderer = new THREE.WebGLRenderer({
+		antialias: true,
+		powerPreference: "high-performance"
+		});
+		this.renderer.setSize(window.innerWidth, window.innerHeight);
+		this.renderer.shadowMap.enabled = false; // 简约风格不需要阴影
+		document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+
+		// 添加微弱的全局环境光
+		const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+		this.scene.add(ambientLight);
+
+		// 添加一点方向光，使场景更有层次感
+		const directionalLight = new THREE.DirectionalLight(0xffffff, 0.2);
+		directionalLight.position.set(50, 100, 50);
+		this.scene.add(directionalLight);
+
+		// 创建改进的星空背景
+		this.createImprovedStarfield();
+
+		// 创建改进的地面
+		this.createEnhancedGround();
+
+		// 创建打赏二维码
+		this.createDonationQRCode();
+
+		// 初始化第一人称控制器
+		this.setupFirstPersonControls();
+		}
+
+		// 创建改进的星空
+		createImprovedStarfield() {
+		// 清空之前的星空
+		if (this.starLayers.length > 0) {
+		this.starLayers.forEach(layer => this.scene.remove(layer.mesh));
+		this.starLayers = [];
+		}
+
+		if (!this.starfieldEnabled) return;
+
+		// 创建三层星空，不同大小和亮度，模拟深度
+		const layerConfigs = [
+		{ count: 4000, size: 0.6, opacity: 0.15, radius: 600, speed: 0.00005 }, // 远处小星星
+		{ count: 3000, size: 1.0, opacity: 0.4, radius: 400, speed: 0.00003 }, // 中距离星星
+		{ count: 1500, size: 1.5, opacity: 0.8, radius: 250, speed: 0.00001 }  // 近处亮星星
+		];
+
+		layerConfigs.forEach((config, layerIndex) => {
+		const starGeometry = new THREE.BufferGeometry();
+		const starPositions = new Float32Array(config.count * 3);
+		const starColors = new Float32Array(config.count * 3);
+		const starSizes = new Float32Array(config.count);
+		const starAlphas = new Float32Array(config.count);
+		const starSpeeds = new Float32Array(config.count);
+
+		for (let i = 0; i < config.count * 3; i += 3) {
+		// 球状分布
+		const radius = config.radius + (Math.random() * 100);
+		const theta = Math.random() * Math.PI * 2;
+		const phi = Math.acos(2 * Math.random() - 1);
+
+		starPositions[i] = radius * Math.sin(phi) * Math.cos(theta);
+		starPositions[i + 1] = radius * Math.sin(phi) * Math.sin(theta);
+		starPositions[i + 2] = radius * Math.cos(phi);
+
+		// 随机颜色（冷色调）
+		const color = new THREE.Color();
+		const hue = 0.6 + (Math.random() * 0.1); // 蓝色调
+		const saturation = 0.2 + (Math.random() * 0.2);
+		const lightness = 0.7 + (Math.random() * 0.3);
+		color.setHSL(hue, saturation, lightness);
+
+		starColors[i] = color.r;
+		starColors[i + 1] = color.g;
+		starColors[i + 2] = color.b;
+
+		// 随机大小
+		starSizes[i / 3] = config.size * (0.5 + Math.random() * 0.8);
+
+		// 随机透明度
+		starAlphas[i / 3] = config.opacity * (0.7 + Math.random() * 0.6);
+
+		// 随机闪烁速度
+		starSpeeds[i / 3] = 1 + Math.random() * 3;
+		}
+
+		starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+		starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+		starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+		starGeometry.setAttribute('alpha', new THREE.BufferAttribute(starAlphas, 1));
+		starGeometry.setAttribute('speed', new THREE.BufferAttribute(starSpeeds, 1));
+
+		// 创建星星材质
+		const starMaterial = new THREE.PointsMaterial({
+		vertexColors: true,
+		size: config.size,
+		sizeAttenuation: true,
+		transparent: true,
+		opacity: 1.0,
+		blending: THREE.AdditiveBlending,
+		depthWrite: false
+		});
+
+		const starLayer = new THREE.Points(starGeometry, starMaterial);
+		starLayer.userData = {
+		speed: config.speed,
+		timeOffset: Math.random() * 1000
+		};
+
+		this.scene.add(starLayer);
+		this.starLayers.push({
+		mesh: starLayer,
+		material: starMaterial,
+		speed: config.speed,
+		geometry: starGeometry,
+		alphas: starAlphas,
+		speeds: starSpeeds
+		});
+		});
+		}
+
+		// 更新星空动画
+		updateStarfield() {
+		if (!this.starfieldEnabled || this.starLayers.length === 0) return;
+
+		this.time += 0.016; // 约60fps的时间增量
+
+		this.starLayers.forEach(layer => {
+		// 轻微旋转，模拟星空移动
+		layer.mesh.rotation.y += layer.speed;
+
+		// 更新星星的闪烁效果
+		if (layer.geometry.attributes.alpha) {
+		const alphas = layer.alphas;
+		const speeds = layer.speeds;
+		const newAlphas = new Float32Array(alphas.length);
+
+		for (let i = 0; i < alphas.length; i++) {
+		// 使用正弦波创建闪烁效果
+		const twinkle = Math.sin(this.time * speeds[i]) * 0.3 + 0.7;
+		newAlphas[i] = alphas[i] * twinkle;
+		}
+
+		// 更新几何体属性
+		layer.geometry.setAttribute('alpha', new THREE.BufferAttribute(newAlphas, 1));
+		layer.geometry.attributes.alpha.needsUpdate = true;
+		}
+		});
+		}
+
+		// 切换星空显示
+		toggleStarfield() {
+		this.starfieldEnabled = !this.starfieldEnabled;
+
+		if (this.starfieldEnabled) {
+		this.createImprovedStarfield();
+		} else {
+		this.starLayers.forEach(layer => this.scene.remove(layer.mesh));
+		this.starLayers = [];
+		}
+
+		// 更新按钮文本
+		const button = document.getElementById('toggle-stars');
+		button.textContent = this.starfieldEnabled ? '关闭星空' : '开启星空';
+		}
+
+		// 创建改进的地面
+		createEnhancedGround() {
+		// 清空之前的地面对象
+		if (this.groundObjects.length > 0) {
+		this.groundObjects.forEach(obj => this.scene.remove(obj));
+		this.groundObjects = [];
+		}
+
+		if (!this.groundEnabled) return;
+
+		// 主地面平面
+		const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+
+		if (this.groundType === 'grid') {
+		// 网格地面
+		const groundMaterial = new THREE.MeshPhongMaterial({
+		color: 0x1a1d2b,
+		side: THREE.DoubleSide,
+		shininess: 10,
+		specular: 0x222222
+		});
+
+		const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+		ground.rotation.x = -Math.PI / 2;
+		ground.position.y = -0.1;
+		this.scene.add(ground);
+		this.groundObjects.push(ground);
+
+		// 添加精细的网格线
+		this.createRefinedGridLines();
+
+		} else if (this.groundType === 'marble') {
+		// 大理石纹理地面
+		this.createMarbleGround();
+		}
+
+		// 添加地面反射效果
+		this.createGroundReflection();
+		}
+
+		// 创建精致的网格线
+		createRefinedGridLines() {
+		const gridSize = 1000;
+		const divisions = 200; // 增加细分，使网格更密集
+		const step = gridSize / divisions; // 5米一格
+		const halfSize = gridSize / 2;
+
+		// 创建网格线组
+		const gridGroup = new THREE.Group();
+
+		// 主要网格线 - 更细、更淡
+		const gridMaterial = new THREE.LineBasicMaterial({
+		color: 0x3a3d4b, // 更浅的颜色
+		transparent: true,
+		opacity: 0.08, // 更低的透明度
+		linewidth: 0.5
+		});
+
+		// X轴方向的线
+		for (let i = -divisions/2; i <= divisions/2; i++) {
+		// 每10条线一条稍粗的线
+		const isMajorLine = i % 10 === 0;
+		const material = isMajorLine ?
+		new THREE.LineBasicMaterial({
+		color: 0x4a4d5b,
+		transparent: true,
+		opacity: 0.12,
+		linewidth: 1
+		}) :
+		gridMaterial;
+
+		const points = [];
+		points.push(new THREE.Vector3(i * step, 0.02, -halfSize));
+		points.push(new THREE.Vector3(i * step, 0.02, halfSize));
+
+		const geometry = new THREE.BufferGeometry().setFromPoints(points);
+		const line = new THREE.Line(geometry, material);
+		gridGroup.add(line);
+		}
+
+		// Z轴方向的线
+		for (let i = -divisions/2; i <= divisions/2; i++) {
+		// 每10条线一条稍粗的线
+		const isMajorLine = i % 10 === 0;
+		const material = isMajorLine ?
+		new THREE.LineBasicMaterial({
+		color: 0x4a4d5b,
+		transparent: true,
+		opacity: 0.12,
+		linewidth: 1
+		}) :
+		gridMaterial;
+
+		const points = [];
+		points.push(new THREE.Vector3(-halfSize, 0.02, i * step));
+		points.push(new THREE.Vector3(halfSize, 0.02, i * step));
+
+		const geometry = new THREE.BufferGeometry().setFromPoints(points);
+		const line = new THREE.Line(geometry, material);
+		gridGroup.add(line);
+		}
+
+		// 中心坐标轴 - 更柔和
+		const axisMaterial = new THREE.LineBasicMaterial({
+		color: 0x5a7ddc, // 更柔和的蓝色
+		transparent: true,
+		opacity: 0.2,
+		linewidth: 1.5
+		});
+
+		// X轴（红色）
+		const xAxisMaterial = new THREE.LineBasicMaterial({
+		color: 0xff6b6b,
+		transparent: true,
+		opacity: 0.15,
+		linewidth: 1.5
+		});
+
+		const xAxisPoints = [
+		new THREE.Vector3(-20, 0.03, 0),
+		new THREE.Vector3(20, 0.03, 0)
+		];
+		const xAxisGeometry = new THREE.BufferGeometry().setFromPoints(xAxisPoints);
+		const xAxis = new THREE.Line(xAxisGeometry, xAxisMaterial);
+		gridGroup.add(xAxis);
+
+		// Z轴（蓝色）
+		const zAxisMaterial = new THREE.LineBasicMaterial({
+		color: 0x4d8aff,
+		transparent: true,
+		opacity: 0.15,
+		linewidth: 1.5
+		});
+
+		const zAxisPoints = [
+		new THREE.Vector3(0, 0.03, -20),
+		new THREE.Vector3(0, 0.03, 20)
+		];
+		const zAxisGeometry = new THREE.BufferGeometry().setFromPoints(zAxisPoints);
+		const zAxis = new THREE.Line(zAxisGeometry, zAxisMaterial);
+		gridGroup.add(zAxis);
+
+		// 添加中心点标记
+		const centerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+		const centerMaterial = new THREE.MeshBasicMaterial({
+		color: 0xffffff,
+		transparent: true,
+		opacity: 0.3
+		});
+		const centerPoint = new THREE.Mesh(centerGeometry, centerMaterial);
+		centerPoint.position.set(0, 0.04, 0);
+		gridGroup.add(centerPoint);
+
+		this.scene.add(gridGroup);
+		this.groundObjects.push(gridGroup);
+		}
+
+		// 创建大理石地面
+		createMarbleGround() {
+		// 创建程序化大理石纹理
+		const canvas = document.createElement('canvas');
+		canvas.width = 1024;
+		canvas.height = 1024;
+		const ctx = canvas.getContext('2d');
+
+		// 创建大理石纹理
+		const baseColor = '#1a1d2b';
+		const veinColor = '#2a2d3b';
+
+		// 填充基础颜色
+		ctx.fillStyle = baseColor;
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+		// 绘制大理石纹理
+		ctx.strokeStyle = veinColor;
+		ctx.lineWidth = 0.3;
+		ctx.globalAlpha = 0.08;
+
+		// 创建随机纹理线条
+		for (let i = 0; i < 80; i++) {
+		ctx.beginPath();
+		const startX = Math.random() * canvas.width;
+		const startY = Math.random() * canvas.height;
+		ctx.moveTo(startX, startY);
+
+		for (let j = 0; j < 15; j++) {
+		const endX = startX + (Math.random() - 0.5) * 150;
+		const endY = startY + (Math.random() - 0.5) * 150;
+		ctx.lineTo(endX, endY);
+		}
+		ctx.stroke();
+		}
+
+		// 添加一些斑点
+		ctx.fillStyle = veinColor;
+		ctx.globalAlpha = 0.03;
+		for (let i = 0; i < 300; i++) {
+		const x = Math.random() * canvas.width;
+		const y = Math.random() * canvas.height;
+		const radius = Math.random() * 2 + 0.5;
+		ctx.beginPath();
+		ctx.arc(x, y, radius, 0, Math.PI * 2);
+		ctx.fill();
+		}
+
+		// 创建纹理
+		const texture = new THREE.CanvasTexture(canvas);
+		texture.wrapS = THREE.RepeatWrapping;
+		texture.wrapT = THREE.RepeatWrapping;
+		texture.repeat.set(8, 8);
+
+		// 创建地面材质
+		const groundMaterial = new THREE.MeshPhongMaterial({
+		map: texture,
+		side: THREE.DoubleSide,
+		shininess: 25,
+		specular: 0x222222
+		});
+
+		const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+		const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+		ground.rotation.x = -Math.PI / 2;
+		ground.position.y = -0.1;
+		this.scene.add(ground);
+		this.groundObjects.push(ground);
+
+		// 添加微妙的网格线
+		this.createSubtleGrid();
+		}
+
+		// 创建微妙的网格线
+		createSubtleGrid() {
+		const gridGroup = new THREE.Group();
+		const gridMaterial = new THREE.LineBasicMaterial({
+		color: 0x3a3d4b,
+		transparent: true,
+		opacity: 0.03
+		});
+
+		const gridSize = 1000;
+		const divisions = 50;
+		const step = gridSize / divisions;
+		const halfSize = gridSize / 2;
+
+		for (let i = -divisions/2; i <= divisions/2; i++) {
+		// X方向
+		const xPoints = [
+		new THREE.Vector3(i * step, 0.02, -halfSize),
+		new THREE.Vector3(i * step, 0.02, halfSize)
+		];
+		const xGeometry = new THREE.BufferGeometry().setFromPoints(xPoints);
+		const xLine = new THREE.Line(xGeometry, gridMaterial);
+		gridGroup.add(xLine);
+
+		// Z方向
+		const zPoints = [
+		new THREE.Vector3(-halfSize, 0.02, i * step),
+		new THREE.Vector3(halfSize, 0.02, i * step)
+		];
+		const zGeometry = new THREE.BufferGeometry().setFromPoints(zPoints);
+		const zLine = new THREE.Line(zGeometry, gridMaterial);
+		gridGroup.add(zLine);
+		}
+
+		this.scene.add(gridGroup);
+		this.groundObjects.push(gridGroup);
+		}
+
+		// 创建地面反射效果
+		createGroundReflection() {
+		// 创建一个透明的反射平面
+		const reflectionGeometry = new THREE.PlaneGeometry(1000, 1000);
+		const reflectionMaterial = new THREE.MeshBasicMaterial({
+		color: 0xffffff,
+		transparent: true,
+		opacity: 0.01,
+		side: THREE.DoubleSide
+		});
+
+		this.groundReflection = new THREE.Mesh(reflectionGeometry, reflectionMaterial);
+		this.groundReflection.rotation.x = -Math.PI / 2;
+		this.groundReflection.position.y = 0.01;
+		this.scene.add(this.groundReflection);
+		this.groundObjects.push(this.groundReflection);
+		}
+
+		// 切换地面类型
+		toggleGroundType() {
+		this.groundType = this.groundType === 'grid' ? 'marble' : 'grid';
+		this.createEnhancedGround();
+
+		// 更新按钮文本
+		const button = document.getElementById('toggle-ground');
+		button.textContent = this.groundType === 'grid' ? '大理石地面' : '网格地面';
+		}
+
+		setupFirstPersonControls() {
+		// 移动状态
+		this.moveState = {
+		forward: false,
+		backward: false,
+		left: false,
+		right: false,
+		run: false
+		};
+
+		// 移动速度
+		this.moveSpeed = {
+		walk: 0.1,
+		run: 0.2
+		};
+
+		// 鼠标控制
+		this.mouse = new THREE.Vector2();
+		this.rotation = {
+		x: 0,
+		y: 0
+		};
+
+		// 锁定指针
+		this.renderer.domElement.addEventListener('click', () => {
+		if (!this.isPointerLocked) {
+		this.renderer.domElement.requestPointerLock();
+		}
+		});
+
+		// 指针锁定变化事件
+		document.addEventListener('pointerlockchange', () => {
+		if (document.pointerLockElement === this.renderer.domElement) {
+		this.isPointerLocked = true;
+		document.addEventListener('mousemove', this.onMouseMove.bind(this));
+		} else {
+		this.isPointerLocked = false;
+		document.removeEventListener('mousemove', this.onMouseMove.bind(this));
+		}
+		});
+
+		// 鼠标右键事件 - 退出指针锁定
+		this.renderer.domElement.addEventListener('mousedown', (event) => {
+		if (event.button === 2) { // 右键的button值是2
+		if (this.isPointerLocked) {
+		document.exitPointerLock();
+		}
+		event.preventDefault(); // 阻止默认行为
+		}
+		});
+
+		// 阻止右键菜单在画布上弹出
+		this.renderer.domElement.addEventListener('contextmenu', (event) => {
+		event.preventDefault();
+		});
+
+		// 键盘事件
+		document.addEventListener('keydown', this.onKeyDown.bind(this));
+		document.addEventListener('keyup', this.onKeyUp.bind(this));
+
+		// 窗口大小调整
+		window.addEventListener('resize', this.onWindowResize.bind(this));
+		}
+
+		onMouseMove(event) {
+		if (!this.isPointerLocked) return;
+
+		this.mouse.x = event.movementX;
+		this.mouse.y = event.movementY;
+
+		// 更新相机旋转
+		this.rotation.x -= this.mouse.y * 0.0015;
+		this.rotation.y -= this.mouse.x * 0.0015;
+
+		// 限制垂直视角
+		this.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, this.rotation.x));
+
+		// 更新相机方向
+		this.camera.rotation.order = 'YXZ';
+		this.camera.rotation.y = this.rotation.y;
+		this.camera.rotation.x = this.rotation.x;
+
+		// 更新移动时间
+		this.updateLastMoveTime();
+		}
+
+		onKeyDown(event) {
+		this.updateLastMoveTime();
+
+		switch(event.code) {
+		case 'KeyW':
+		this.moveState.forward = true;
+		break;
+		case 'KeyS':
+		this.moveState.backward = true;
+		break;
+		case 'KeyA':
+		this.moveState.left = true;
+		break;
+		case 'KeyD':
+		this.moveState.right = true;
+		break;
+		case 'ShiftLeft':
+		this.moveState.run = true;
+		break;
+		case 'Tab':
+		event.preventDefault(); // 防止Tab键的默认行为
+		this.toggleImmersiveMode();
+		break;
+		case 'Escape':
+		if (document.pointerLockElement) {
+		document.exitPointerLock();
+		}
+		break;
+		case 'ArrowLeft':  // 添加左方向键处理
+		this.seekVideo(-5);  // 快退5秒
+		break;
+		case 'ArrowRight': // 添加右方向键处理
+		this.seekVideo(5);   // 快进5秒
+		break;
+		}
+		}
+
+		onKeyUp(event) {
+		switch(event.code) {
+		case 'KeyW':
+		this.moveState.forward = false;
+		break;
+		case 'KeyS':
+		this.moveState.backward = false;
+		break;
+		case 'KeyA':
+		this.moveState.left = false;
+		break;
+		case 'KeyD':
+		this.moveState.right = false;
+		break;
+		case 'ShiftLeft':
+		this.moveState.run = false;
+		break;
+		}
+		}
+
+		onContextMenu(event) {
+		event.preventDefault(); // 始终阻止默认右键菜单
+
+		// 如果指针已锁定，则退出锁定
+		if (this.isPointerLocked) {
+		document.exitPointerLock();
+		return;
+		}
+		}
+
+		updateLastMoveTime() {
+		this.lastMoveTime = Date.now();
+
+		// 显示准星
+		if (!this.crosshairVisible) {
+		this.crosshairVisible = true;
+		document.getElementById('crosshair').classList.remove('hidden');
+		}
+		}
+
+		updateMovement() {
+		// 计算移动方向（仅在水平面移动）
+		const direction = new THREE.Vector3();
+		this.camera.getWorldDirection(direction);
+		direction.y = 0; // 禁止垂直方向移动
+		direction.normalize();
+
+		// 计算侧向向量（仅在水平面移动）
+		const sideVector = new THREE.Vector3();
+		sideVector.crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
+
+		// 根据移动状态更新位置
+		const speed = this.moveState.run ? this.moveSpeed.run : this.moveSpeed.walk;
+
+		if (this.moveState.forward) {
+		this.camera.position.add(direction.multiplyScalar(speed));
+		}
+		if (this.moveState.backward) {
+		this.camera.position.add(direction.multiplyScalar(-speed));
+		}
+		if (this.moveState.left) {
+		this.camera.position.add(sideVector.multiplyScalar(speed));
+		}
+		if (this.moveState.right) {
+		this.camera.position.add(sideVector.multiplyScalar(-speed));
+		}
+
+		// 确保人物高度固定为1.7米
+		this.camera.position.y = 1.7;
+
+		// 检查是否需要隐藏准星（3秒不动）
+		if (Date.now() - this.lastMoveTime > 3000 && this.crosshairVisible) {
+		this.crosshairVisible = false;
+		document.getElementById('crosshair').classList.add('hidden');
+		}
+		}
+
+		onWindowResize() {
+		this.camera.aspect = window.innerWidth / window.innerHeight;
+		this.camera.updateProjectionMatrix();
+		this.renderer.setSize(window.innerWidth, window.innerHeight);
+		}
+
+		toggleImmersiveMode() {
+		this.isImmersive = !this.isImmersive;
+
+		const ui = document.getElementById('ui');
+		const instructions = document.getElementById('instructions');
+		const performanceStats = document.getElementById('performance-stats');
+
+		if (this.isImmersive) {
+		ui.classList.add('hidden');
+		instructions.classList.add('hidden');
+		performanceStats.classList.add('hidden');
+		} else {
+		ui.classList.remove('hidden');
+		instructions.classList.remove('hidden');
+		performanceStats.classList.remove('hidden');
+		}
+		}
+
+		togglePerformanceMode() {
+		this.performanceMode = !this.performanceMode;
+
+		// 更新UI
+		const button = document.getElementById('performance-toggle');
+		button.textContent = this.performanceMode ? '正常模式' : '性能模式';
+
+		// 应用性能模式设置
+		this.applyPerformanceSettings();
+		}
+
+		applyPerformanceSettings() {
+		if (this.performanceMode) {
+		// 性能模式：降低渲染质量
+		this.renderer.setPixelRatio(1);
+		this.maxVisibleMedia = 15;
+		this.viewDistance = 30;
+		this.spawnDistance = 25;
+		this.unloadDistance = 40;
+
+		// 关闭星空和地面效果
+		this.starfieldEnabled = false;
+		this.groundEnabled = false;
+		this.createEnhancedGround();
+		if (this.starLayers.length > 0) {
+		this.starLayers.forEach(layer => this.scene.remove(layer.mesh));
+		this.starLayers = [];
+		}
+		} else {
+		// 正常模式：恢复默认设置
+		this.renderer.setPixelRatio(window.devicePixelRatio);
+		this.maxVisibleMedia = 40;
+		this.viewDistance = 70;
+		this.spawnDistance = 70;
+		this.unloadDistance = 70;
+
+		// 恢复星空和地面效果
+		this.starfieldEnabled = true;
+		this.groundEnabled = true;
+		this.createEnhancedGround();
+		this.createImprovedStarfield();
+		}
+
+		// 重新评估所有媒体的可见性
+		this.evaluateMediaVisibility();
+		}
+
+		setupEventListeners() {
+		const fileInput = document.getElementById('file-input');
+
+		// 文件导入 - 文件夹
+		document.getElementById('import-folder').addEventListener('click', () => {
+		// 设置文件夹选择模式
+		fileInput.setAttribute('webkitdirectory', '');
+		fileInput.setAttribute('directory', '');
+		fileInput.setAttribute('multiple', '');
+		fileInput.accept = 'image/*,video/*'; // 限制文件类型
+		fileInput.click();
+		console.log('文件夹选择模式已激活');
+		});
+
+		// 文件导入 - 单个文件
+		document.getElementById('import-files').addEventListener('click', () => {
+		// 移除文件夹属性，设置为多文件选择
+		fileInput.removeAttribute('webkitdirectory');
+		fileInput.removeAttribute('directory');
+		fileInput.setAttribute('multiple', '');
+		fileInput.accept = 'image/*,video/*'; // 限制文件类型
+		fileInput.click();
+		console.log('文件选择模式已激活');
+		});
+
+		// 文件选择处理
+		fileInput.addEventListener('change', (event) => {
+		const files = event.target.files;
+		console.log('选择的文件数量:', files.length);
+
+		if (files.length > 0) {
+		// 显示文件信息用于调试
+		for (let i = 0; i < Math.min(files.length, 5); i++) {
+		const file = files[i];
+		console.log(`文件 ${i + 1}:`, file.name,
+		'类型:', file.type,
+		'路径:', file.webkitRelativePath || file.name);
+		}
+		if (files.length > 5) {
+		console.log(`... 还有 ${files.length - 5} 个文件`);
+		}
+
+		this.handleFiles(files);
+		} else {
+		console.log('没有选择文件');
+		}
+
+		// 重置input
+		event.target.value = '';
+
+		// 重置文件输入属性
+		fileInput.removeAttribute('webkitdirectory');
+		fileInput.removeAttribute('directory');
+		});
+
+		// 移除所有媒体
+		document.getElementById('remove-all').addEventListener('click', () => {
+		this.removeAllMedia();
+		});
+
+		// 人物复位
+		document.getElementById('reset-position').addEventListener('click', () => {
+		this.resetPosition();
+		});
+
+		// 性能模式切换
+		document.getElementById('performance-toggle').addEventListener('click', () => {
+		this.togglePerformanceMode();
+		});
+
+		// 地面切换
+		document.getElementById('toggle-ground').addEventListener('click', () => {
+		this.toggleGroundType();
+		});
+
+		// 星空切换
+		document.getElementById('toggle-stars').addEventListener('click', () => {
+		this.toggleStarfield();
+		});
+
+		// 视频控制事件
+		this.setupVideoControls();
+
+		// 检查文件夹选择支持
+		this.checkFolderSelectionSupport();
+
+		// 添加全屏切换
+		document.addEventListener('keydown', (e) => {
+		if (e.code === 'F11') {
+		e.preventDefault();
+		if (!document.fullscreenElement) {
+		document.documentElement.requestFullscreen();
+		} else {
+		document.exitFullscreen();
+		}
+		}
+		});
+		}
+
+		// 添加文件夹选择支持检查
+		checkFolderSelectionSupport() {
+		const fileInput = document.getElementById('file-input');
+		const folderButton = document.getElementById('import-folder');
+
+		if (!fileInput.webkitdirectory && !fileInput.directory) {
+		console.warn('浏览器不支持文件夹选择');
+		folderButton.style.opacity = '0.5';
+		folderButton.title = '您的浏览器不支持文件夹选择功能';
+		folderButton.addEventListener('click', (e) => {
+		e.preventDefault();
+		alert('您的浏览器不支持文件夹选择功能。请使用Chrome、Edge或Firefox等现代浏览器。');
+		});
+		} else {
+		console.log('浏览器支持文件夹选择');
+		}
+		}
+
+		setupVideoControls() {
+		const playPauseBtn = document.getElementById('play-pause-btn');
+		const muteBtn = document.getElementById('mute-btn');
+		const progressSlider = document.getElementById('progress-slider');
+		const volumeSlider = document.getElementById('volume-slider');
+
+		playPauseBtn.addEventListener('click', () => {
+		if (this.currentlyPlaying && this.currentlyPlaying.element) {
+		if (this.currentlyPlaying.isPlaying) {
+		this.pauseMedia(this.currentlyPlaying);
+		playPauseBtn.textContent = '播放';
+		} else {
+		this.playMedia(this.currentlyPlaying);
+		playPauseBtn.textContent = '暂停';
+		}
+		}
+		});
+
+		muteBtn.addEventListener('click', () => {
+		if (this.currentlyPlaying && this.currentlyPlaying.element) {
+		this.currentlyPlaying.element.muted = !this.currentlyPlaying.element.muted;
+		muteBtn.textContent = this.currentlyPlaying.element.muted ? '取消静音' : '静音';
+		}
+		});
+
+		// 进度条控制
+		progressSlider.addEventListener('click', (e) => {
+		if (this.currentlyPlaying && this.currentlyPlaying.element) {
+		const rect = progressSlider.getBoundingClientRect();
+		const percent = (e.clientX - rect.left) / rect.width;
+		this.currentlyPlaying.element.currentTime = percent * this.currentlyPlaying.element.duration;
+		}
+		});
+
+		// 音量控制
+		volumeSlider.addEventListener('click', (e) => {
+		if (this.currentlyPlaying && this.currentlyPlaying.element) {
+		const rect = volumeSlider.getBoundingClientRect();
+		const volume = (e.clientX - rect.left) / rect.width;
+		this.currentlyPlaying.element.volume = Math.max(0, Math.min(1, volume));
+		this.updateVideoControlsUI();
+		}
+		});
+		}
+
+		updateVideoControlsUI() {
+		if (!this.currentlyPlaying || !this.currentlyPlaying.element) return;
+
+		const video = this.currentlyPlaying.element;
+		const progressBar = document.getElementById('progress-bar');
+		const progressHandle = document.getElementById('progress-handle');
+		const volumeBar = document.getElementById('volume-bar');
+		const volumeHandle = document.getElementById('volume-handle');
+		const playPauseBtn = document.getElementById('play-pause-btn');
+		const muteBtn = document.getElementById('mute-btn');
+
+		// 更新进度条
+		if (video.duration) {
+		const progressPercent = (video.currentTime / video.duration) * 100;
+		progressBar.style.width = `${progressPercent}%`;
+		progressHandle.style.left = `${progressPercent}%`;
+		}
+
+		// 更新音量条
+		const volumePercent = video.volume * 100;
+		volumeBar.style.width = `${volumePercent}%`;
+		volumeHandle.style.left = `${volumePercent}%`;
+
+		// 更新按钮状态
+		playPauseBtn.textContent = video.paused ? '播放' : '暂停';
+		muteBtn.textContent = video.muted ? '取消静音' : '静音';
+		}
+
+		showVideoControls() {
+		this.videoControlsVisible = true;
+		document.getElementById('video-controls').classList.remove('hidden');
+		this.updateVideoControlsUI();
+		}
+
+		hideVideoControls() {
+		this.videoControlsVisible = false;
+		document.getElementById('video-controls').classList.add('hidden');
+		}
+
+		handleFiles(files) {
+		console.log('开始处理文件，总数:', files.length);
+
+		let supportedCount = 0;
+		let unsupportedCount = 0;
+		let imageCount = 0;
+		let videoCount = 0;
+		let gifCount = 0;
+
+		// 清空加载队列
+		this.loadingQueue = [];
+
+		for (let i = 0; i < files.length; i++) {
+		const file = files[i];
+		const fileType = file.type.split('/')[0];
+
+		// 支持的文件类型
+		const isImage = fileType === 'image';
+		const isVideo = fileType === 'video';
+		const isGif = file.type === 'image/gif';
+
+		if (isImage || isVideo) {
+		this.loadingQueue.push(file);
+		supportedCount++;
+
+		if (isImage) imageCount++;
+		if (isVideo) videoCount++;
+		if (isGif) gifCount++;
+		} else {
+		console.log(`跳过不支持的文件: ${file.name} (${file.type})`);
+		unsupportedCount++;
+		}
+		}
+
+		// 设置加载参数
+		this.totalToLoad = supportedCount;
+		this.loadedCount = 0;
+
+		// 显示加载界面
+		this.showLoadingOverlay();
+
+		// 开始处理队列
+		this.processLoadingQueue();
+
+		console.log(`处理完成: ${supportedCount} 个支持的文件 (${imageCount} 图片, ${videoCount} 视频, ${gifCount} GIF), ${unsupportedCount} 个不支持的文件`);
+
+		// 显示处理结果
+		if (supportedCount > 0) {
+		const message = `成功导入 ${supportedCount} 个媒体文件\n` +
+		`- 图片: ${imageCount}\n` +
+		`- 视频: ${videoCount}\n` +
+		`- GIF: ${gifCount}`;
+		console.log(message);
+		} else if (files.length > 0) {
+		alert('没有找到支持的图片或视频文件。\n请选择 JPEG、PNG、GIF 图片或 MP4、WebM 视频文件。');
+		}
+		}
+
+		showLoadingOverlay() {
+		const overlay = document.getElementById('loading-overlay');
+		const loadingText = document.getElementById('loading-text');
+		const loadingBar = document.getElementById('loading-bar');
+
+		loadingText.textContent = '正在加载媒体文件...';
+		loadingBar.style.width = '0%';
+		overlay.classList.remove('hidden');
+		}
+
+		hideLoadingOverlay() {
+		const overlay = document.getElementById('loading-overlay');
+		overlay.classList.add('hidden');
+		}
+
+		updateLoadingProgress() {
+		const progress = (this.loadedCount / this.totalToLoad) * 100;
+		const loadingBar = document.getElementById('loading-bar');
+		const loadingText = document.getElementById('loading-text');
+
+		loadingBar.style.width = `${progress}%`;
+		loadingText.textContent = `正在加载媒体文件... ${this.loadedCount}/${this.totalToLoad}`;
+
+		if (this.loadedCount >= this.totalToLoad) {
+		setTimeout(() => {
+		this.hideLoadingOverlay();
+		}, 500);
+		}
+		}
+
+		processLoadingQueue() {
+		if (this.loadingQueue.length === 0) {
+		this.isLoading = false;
+		return;
+		}
+
+		this.isLoading = true;
+
+		// 每次处理5个文件，避免阻塞主线程
+		const batchSize = 5;
+		const batch = this.loadingQueue.splice(0, batchSize);
+
+		let processedInBatch = 0;
+
+		batch.forEach(file => {
+		this.createMediaObject(file, () => {
+		processedInBatch++;
+		this.loadedCount++;
+		this.updateLoadingProgress();
+
+		if (processedInBatch >= batch.length) {
+		// 继续处理下一批
+		setTimeout(() => {
+		this.processLoadingQueue();
+		}, 0);
+		}
+		});
+		});
+		}
+
+		createMediaObject(file, onLoadComplete) {
+		// 检查是否超过最大媒体数量限制
+		if (this.mediaObjects.length >= this.maxMediaObjects) {
+		// 找到最远的媒体对象进行替换
+		this.unloadFarthestMedia();
+		}
+
+		const fileType = file.type.split('/')[0];
+		const fileExtension = file.name.split('.').pop().toUpperCase();
+
+		// 创建媒体对象
+		const mediaObject = {
+		file: file,
+		type: fileType,
+		extension: fileExtension,
+		element: null,
+		texture: null,
+		mesh: null,
+		isPlaying: false,
+		isVideo: fileType === 'video',
+		isGif: file.type === 'image/gif',
+		labelMesh: null,
+		lastSeen: Date.now(),
+		distance: 0,
+		gridKey: null,
+		isVisible: false,
+		priority: Math.random() // 添加优先级字段，用于无序加载
+		};
+
+		// 创建媒体平面 - 使用简约材质
+		const geometry = new THREE.PlaneGeometry(1, 1);
+		const material = new THREE.MeshBasicMaterial({
+		side: THREE.DoubleSide, // 正反面亮度一致
+		transparent: true
+		});
+
+		const mesh = new THREE.Mesh(geometry, material);
+
+		// 初始位置设置为远离视野
+		mesh.position.set(1000, 0, 1000);
+
+		// 设置媒体高度
+		mesh.position.y = 1.85; // 0.3米距地面 + 1.7米人物高度的一半
+
+		this.scene.add(mesh);
+		mediaObject.mesh = mesh;
+
+		// 加载媒体内容
+		this.loadMediaContent(mediaObject, onLoadComplete);
+
+		this.mediaObjects.push(mediaObject);
+
+		// 更新媒体计数显示
+		this.updatePerformanceStats();
+		}
+
+		// 获取网格键值
+		getGridKey(position) {
+		const gridX = Math.round(position.x / this.gridSize);
+		const gridZ = Math.round(position.z / this.gridSize);
+		return `${gridX},${gridZ}`;
+		}
+
+		// 检查位置是否可用
+		isPositionAvailable(position) {
+		const gridKey = this.getGridKey(position);
+
+		// 检查是否已被占用
+		if (this.occupiedGrids.has(gridKey)) {
+		return false;
+		}
+
+		// 检查是否与其他可见媒体距离过近
+		for (const obj of this.visibleMedia) {
+		if (obj.mesh && position.distanceTo(obj.mesh.position) < this.minSpacing) {
+		return false;
+		}
+		}
+
+		return true;
+		}
+
+		// 修改：获取环形区域内的可用位置（由近到远）
+		getAvailablePositionInRing() {
+		const cameraPos = this.camera.position;
+		const attemptsPerRing = 20; // 每个距离环的尝试次数
+		
+		// 从最近距离开始，逐步向外寻找
+		for (let distance = this.minDistance; distance <= this.spawnDistance; distance += this.minSpacing * 0.8) {
+		for (let attempt = 0; attempt < attemptsPerRing; attempt++) {
+		// 在环形区域随机角度
+		const angle = Math.random() * Math.PI * 2;
+		
+		const position = new THREE.Vector3(
+		cameraPos.x + Math.cos(angle) * distance,
+		0,
+		cameraPos.z + Math.sin(angle) * distance
+		);
+
+		if (this.isPositionAvailable(position)) {
+		return { position, distance };
+		}
+		}
+		}
+
+		// 如果找不到合适位置，返回null
+		return null;
+		}
+
+		// 修改：动态生成媒体 - 无序方式由近到远
+		spawnMedia() {
+		const now = Date.now();
+
+		// 控制生成频率
+		if (now - this.lastSpawnCheck < this.spawnInterval) {
+		return;
+		}
+
+		this.lastSpawnCheck = now;
+
+		// 如果可见媒体数量已达上限，不生成新媒体
+		if (this.visibleMedia.length >= this.maxVisibleMedia) {
+		return;
+		}
+
+		// 查找未显示的媒体，按优先级排序（实现无序加载）
+		const availableMedia = this.mediaObjects.filter(obj =>
+		!obj.isVisible && obj.mesh && obj.texture
+		).sort((a, b) => a.priority - b.priority);
+
+		if (availableMedia.length === 0) {
+		return;
+		}
+
+		// 选择一个媒体（基于优先级，实现无序加载）
+		const mediaObject = availableMedia[0];
+
+		// 获取可用位置（由近到远）
+		const positionData = this.getAvailablePositionInRing();
+
+		if (positionData) {
+		const { position, distance } = positionData;
+		
+		// 设置位置
+		mediaObject.mesh.position.copy(position);
+		mediaObject.mesh.position.y = 1.85;
+
+		// 设置媒体朝向出生点 (0, 1.7, 0) 而不是相机
+		const direction = new THREE.Vector3();
+		const spawnPoint = new THREE.Vector3(0, 1.7, 0); // 出生点
+		direction.subVectors(spawnPoint, mediaObject.mesh.position);
+		direction.y = 0; // 只在水平面旋转
+
+		// 设置媒体朝向出生点
+		mediaObject.mesh.lookAt(
+		mediaObject.mesh.position.x + direction.x,
+		mediaObject.mesh.position.y,
+		mediaObject.mesh.position.z + direction.z
+		);
+
+		// 标记为可见
+		mediaObject.isVisible = true;
+		mediaObject.mesh.visible = true;
+		if (mediaObject.labelMesh) mediaObject.labelMesh.visible = true;
+		
+		// 更新距离
+		mediaObject.distance = distance;
+
+		// 记录网格占用
+		const gridKey = this.getGridKey(position);
+		mediaObject.gridKey = gridKey;
+		this.occupiedGrids.add(gridKey);
+
+		// 添加到可见媒体列表
+		this.visibleMedia.push(mediaObject);
+		
+		console.log(`媒体 ${mediaObject.file.name} 生成在距离 ${distance.toFixed(1)} 米处`);
+		}
+		}
+
+		loadMediaContent(mediaObject, onLoadComplete) {
+		const file = mediaObject.file;
+		const mesh = mediaObject.mesh;
+
+		if (mediaObject.type === 'image') {
+		if (mediaObject.isGif) {
+		// 处理GIF
+		this.loadGif(mediaObject, onLoadComplete);
+		} else {
+		// 处理静态图片
+		const reader = new FileReader();
+
+		reader.onload = (event) => {
+		const img = new Image();
+
+		img.onload = () => {
+		// 根据图片比例调整大小
+		const aspect = img.width / img.height;
+		const height = 3.2; // 3.5米顶边高度 - 0.3米距地面
+		const width = height * aspect;
+
+		mesh.scale.set(width, height, 1);
+
+		// 创建纹理
+		const texture = new THREE.Texture(img);
+		texture.needsUpdate = true;
+
+		mediaObject.texture = texture;
+		mesh.material.map = texture;
+		mesh.material.needsUpdate = true;
+
+		// 添加扩展名标签
+		this.addExtensionLabel(mediaObject);
+
+		// 调用完成回调
+		if (onLoadComplete) onLoadComplete();
+		};
+
+		img.src = event.target.result;
+		};
+
+		reader.readAsDataURL(file);
+		}
+		} else if (mediaObject.type === 'video') {
+		// 处理视频
+		const video = document.createElement('video');
+		video.src = URL.createObjectURL(file);
+		video.loop = true;
+		video.muted = false; // 取消静音
+		video.volume = 0.5; // 默认音量
+		video.playsInline = true;
+
+		mediaObject.element = video;
+
+		video.onloadedmetadata = () => {
+		// 根据视频比例调整大小
+		const aspect = video.videoWidth / video.videoHeight;
+		const height = 3.2; // 3.5米顶边高度 - 0.3米距地面
+		const width = height * aspect;
+
+		mesh.scale.set(width, height, 1);
+
+		// 创建视频纹理
+		const texture = new THREE.VideoTexture(video);
+		texture.minFilter = THREE.LinearFilter;
+		texture.magFilter = THREE.LinearFilter;
+		texture.format = THREE.RGBFormat;
+
+		mediaObject.texture = texture;
+		mesh.material.map = texture;
+		mesh.material.needsUpdate = true;
+
+		// 添加扩展名标签
+		this.addExtensionLabel(mediaObject);
+
+		// 调用完成回调
+		if (onLoadComplete) onLoadComplete();
+		};
+
+		// 视频加载错误处理
+		video.onerror = () => {
+		console.error('视频加载失败:', file.name);
+		if (onLoadComplete) onLoadComplete();
+		};
+		}
+		}
+
+		loadGif(mediaObject, onLoadComplete) {
+		const file = mediaObject.file;
+		const mesh = mediaObject.mesh;
+
+		const url = URL.createObjectURL(file);
+		const img = new Image();
+
+		img.onload = () => {
+		// 根据GIF比例调整媒体大小
+		const aspect = img.width / img.height;
+		const height = 3.2;
+		const width = height * aspect;
+
+		mesh.scale.set(width, height, 1);
+
+		// 直接创建静态纹理
+		const texture = new THREE.Texture(img);
+		texture.needsUpdate = true;
+
+		mediaObject.texture = texture;
+		mesh.material.map = texture;
+		mesh.material.needsUpdate = true;
+
+		// 标记为静态图片，不处理播放
+		mediaObject.isPlaying = false;
+
+		console.log('GIF加载为静态图片:', file.name);
+
+		// 添加扩展名标签
+		this.addExtensionLabel(mediaObject);
+
+		URL.revokeObjectURL(url);
+
+		// 调用完成回调
+		if (onLoadComplete) onLoadComplete();
+		};
+
+		img.src = url;
+
+		// GIF加载错误处理
+		img.onerror = () => {
+		console.error('GIF加载失败:', file.name);
+		if (onLoadComplete) onLoadComplete();
+		};
+		}
+
+		addExtensionLabel(mediaObject) {
+		// 创建扩展名标签
+		const canvas = document.createElement('canvas');
+		const resolutionScale = 2; // 提高分辨率
+
+		const text = mediaObject.extension;
+		const textLength = text.length;
+
+		canvas.width = Math.max(256, textLength * 40)* resolutionScale; // 根据文字长度调整
+		canvas.height = 96 * resolutionScale;
+
+		const context = canvas.getContext('2d');
+
+		// 简约背景
+		context.fillStyle = 'rgba(255, 255, 255, 0.1)';
+		context.fillRect(0, 0, canvas.width, canvas.height);
+
+		// 添加简约边框
+		context.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+		context.lineWidth = 2 * resolutionScale;
+		context.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+
+		context.font = `bold ${36 * resolutionScale}px Inter`;
+		context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+		context.textAlign = 'center';
+		context.textBaseline = 'middle';
+		context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+		const texture = new THREE.CanvasTexture(canvas);
+		texture.minFilter = THREE.LinearFilter;
+		texture.magFilter = THREE.LinearFilter;
+		texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+
+		const material = new THREE.MeshBasicMaterial({
+		map: texture,
+		transparent: true,
+		side: THREE.DoubleSide
+		});
+
+		// 根据canvas比例计算标签大小
+		const labelAspect = canvas.width / canvas.height;
+		const labelHeight = 0.15; // 固定高度
+		const labelWidth = labelHeight * labelAspect; // 按比例计算宽度
+
+		const geometry = new THREE.PlaneGeometry(labelWidth, labelHeight);
+		const labelMesh = new THREE.Mesh(geometry, material);
+
+		// 位置计算
+		labelMesh.position.y = 0.6; // 媒体上方固定位置
+		labelMesh.position.z = 0.02;
+
+		mediaObject.mesh.add(labelMesh);
+		mediaObject.labelMesh = labelMesh;
+		}
+
+		// 创建打赏二维码
+		createDonationQRCode() {
+		const textureLoader = new THREE.TextureLoader();
+
+		// 加载二维码图片
+		textureLoader.load('./打赏二维码.jpg', (texture) => {
+		this.createQRCodeWithTexture(texture);
+		}, undefined, (error) => {
+		console.error('加载打赏二维码失败:', error);
+		// 如果加载失败，创建一个替代的简约平面
+		this.createFallbackQRCode();
+		});
+		}
+
+		// 修改后的创建带纹理的二维码
+		createQRCodeWithTexture(texture) {
+		// 创建二维码平面
+		const qrGeometry = new THREE.PlaneGeometry(2, 2); // 2米x2米大小
+		const qrMaterial = new THREE.MeshBasicMaterial({
+		map: texture,
+		side: THREE.FrontSide,
+		transparent: true
+		});
+
+		const qrMesh = new THREE.Mesh(qrGeometry, qrMaterial);
+
+		// 修正：放置在出生点身后2米处（Z轴为负值）
+		qrMesh.position.set(0, 1.7, 2);
+
+		this.scene.add(qrMesh);
+		this.donationQR = qrMesh;
+
+		// 创建文字标签数组
+		this.donationTexts = [];
+
+		// 创建上方的文字标签
+		const topText = this.createFloatingText('如果觉得还不错，不妨请开发者喝杯饮料吧！',
+		new THREE.Vector3(0, 1.3, 0));
+		this.donationTexts.push(topText);
+
+		// 创建下方的文字标签
+		const bottomText = this.createFloatingText('扫描二维码打赏',
+		new THREE.Vector3(0, -1.3, 0));
+		this.donationTexts.push(bottomText);
+
+		console.log('打赏二维码和文字标签已创建');
+		}
+
+		// 修改后的创建纯文字标签函数
+		createFloatingText(text, position) {
+		const canvas = document.createElement('canvas');
+		const context = canvas.getContext('2d');
+
+		// 设置字体和测量文字
+		const fontSize = 60;
+		context.font = `600 ${fontSize}px Inter`;
+		const textMetrics = context.measureText(text);
+		const textWidth = textMetrics.width;
+
+		// 设置canvas尺寸（包含内边距）
+		const padding = 40;
+		const canvasWidth = Math.ceil(textWidth + padding * 2);
+		const canvasHeight = Math.ceil(fontSize * 1.5);
+
+		canvas.width = canvasWidth;
+		canvas.height = canvasHeight;
+
+		// 重新设置字体和样式
+		context.font = `600 ${fontSize}px Inter`;
+		context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+		context.textAlign = 'center';
+		context.textBaseline = 'middle';
+
+		// 透明背景
+		context.clearRect(0, 0, canvas.width, canvas.height);
+
+		// 绘制文字
+		context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+		// 创建3D文字平面
+		const texture = new THREE.CanvasTexture(canvas);
+		texture.minFilter = THREE.LinearFilter;
+		texture.magFilter = THREE.LinearFilter;
+
+		const material = new THREE.MeshBasicMaterial({
+		map: texture,
+		side: THREE.FrontSide,
+		transparent: true,
+		depthTest: false  // 禁用深度测试，确保文字始终可见
+		});
+
+		// 根据文字长度调整3D平面大小
+		const aspectRatio = canvasWidth / canvasHeight;
+		const height3D = 0.3; // 文字高度
+		const width3D = height3D * aspectRatio;
+
+		const geometry = new THREE.PlaneGeometry(width3D, height3D);
+		const textMesh = new THREE.Mesh(geometry, material);
+
+		// 设置位置（相对于二维码）
+		textMesh.position.copy(position);
+
+		// 添加到场景
+		this.scene.add(textMesh);
+
+		return textMesh;
+		}
+
+		// 备用方案：如果二维码图片加载失败，创建一个简约替代品
+		createFallbackQRCode() {
+		// 创建替代纹理
+		const canvas = document.createElement('canvas');
+		const context = canvas.getContext('2d');
+		const size = 512;
+
+		canvas.width = size;
+		canvas.height = size;
+
+		// 深色背景
+		context.fillStyle = '#1a1d2b';
+		context.fillRect(0, 0, size, size);
+
+		// 白色边框和文字
+		context.strokeStyle = '#ffffff';
+		context.lineWidth = 8;
+		context.strokeRect(20, 20, size - 40, size - 40);
+
+		context.fillStyle = '#ffffff';
+		context.font = 'bold 60px Inter';
+		context.textAlign = 'center';
+		context.textBaseline = 'middle';
+		context.fillText('二维码加载失败', size / 2, size / 2 - 30);
+		context.fillText('请检查图片文件', size / 2, size / 2 + 30);
+
+		// 创建纹理
+		const texture = new THREE.CanvasTexture(canvas);
+
+		// 使用相同的创建方法
+		this.createQRCodeWithTexture(texture);
+
+		console.log('创建了替代二维码平面');
+		}
+
+		playMedia(mediaObject) {
+		console.log('播放媒体:', mediaObject.file.name);
+
+		if (mediaObject.type === 'video') {
+		mediaObject.element.play().then(() => {
+		mediaObject.isPlaying = true;
+		});
+		}
+		}
+
+		pauseMedia(mediaObject) {
+		console.log('暂停媒体:', mediaObject.file.name);
+
+		if (mediaObject.type === 'video') {
+		mediaObject.element.pause();
+		mediaObject.isPlaying = false;
+		}
+		}
+
+		removeAllMedia() {
+		for (const mediaObject of this.mediaObjects) {
+		this.unloadMedia(mediaObject);
+		}
+
+		this.mediaObjects = [];
+		this.visibleMedia = [];
+		this.occupiedGrids.clear();
+		this.currentlyPlaying = null;
+		this.hideVideoControls();
+
+		// 更新性能统计
+		this.updatePerformanceStats();
+		}
+
+		unloadMedia(mediaObject) {
+		if (mediaObject.mesh) {
+		this.scene.remove(mediaObject.mesh);
+		}
+
+		if (mediaObject.element && mediaObject.type === 'video') {
+		mediaObject.element.pause();
+		URL.revokeObjectURL(mediaObject.element.src);
+		}
+
+		// 释放纹理内存
+		if (mediaObject.texture) {
+		mediaObject.texture.dispose();
+		}
+
+		// 释放标签纹理
+		if (mediaObject.labelMesh && mediaObject.labelMesh.material.map) {
+		mediaObject.labelMesh.material.map.dispose();
+		}
+		}
+
+		unloadFarthestMedia() {
+		if (this.mediaObjects.length === 0) return;
+
+		// 找到最远的媒体（排除当前播放的媒体）
+		let farthestIndex = -1;
+		let maxDistance = -1;
+
+		for (let i = 0; i < this.mediaObjects.length; i++) {
+		const obj = this.mediaObjects[i];
+		if (obj !== this.currentlyPlaying && obj.distance > maxDistance) {
+		maxDistance = obj.distance;
+		farthestIndex = i;
+		}
+		}
+
+		// 如果找到了最远的媒体，卸载它
+		if (farthestIndex >= 0) {
+		console.log(`卸载最远媒体: ${this.mediaObjects[farthestIndex].file.name}, 距离: ${maxDistance.toFixed(2)}米`);
+		this.unloadMedia(this.mediaObjects[farthestIndex]);
+		this.mediaObjects.splice(farthestIndex, 1);
+		}
+		}
+
+		// 修改：评估媒体可见性
+		evaluateMediaVisibility() {
+		const cameraPos = this.camera.position;
+
+		// 更新所有媒体的距离
+		this.mediaObjects.forEach(obj => {
+		if (obj.mesh) {
+		obj.distance = cameraPos.distanceTo(obj.mesh.position);
+		}
+		});
+
+		// 检查需要隐藏的媒体
+		for (let i = this.visibleMedia.length - 1; i >= 0; i--) {
+		const obj = this.visibleMedia[i];
+
+		// 如果媒体距离过远（超过70米），隐藏它
+		if (obj.distance > this.viewDistance) {
+		this.hideMedia(obj);
+		this.visibleMedia.splice(i, 1);
+		}
+		}
+
+		// 动态生成新媒体
+		this.spawnMedia();
+		}
+
+		hideMedia(mediaObject) {
+		if (mediaObject.mesh) {
+		// 移出视野
+		mediaObject.mesh.position.set(1000, 0, 1000);
+		mediaObject.mesh.visible = false;
+
+		// 释放网格占用
+		if (mediaObject.gridKey) {
+		this.occupiedGrids.delete(mediaObject.gridKey);
+		mediaObject.gridKey = null;
+		}
+
+		// 标记为不可见
+		mediaObject.isVisible = false;
+
+		// 如果是视频且正在播放，暂停它
+		if (mediaObject.isVideo && mediaObject.isPlaying && mediaObject !== this.currentlyPlaying) {
+		this.pauseMedia(mediaObject);
+		}
+		}
+		}
+
+		resetPosition() {
+		this.camera.position.set(0, 1.7, 0);
+		this.rotation.x = 0;
+		this.rotation.y = 0;
+		this.camera.rotation.set(0, 0, 0);
+
+		// 重置所有媒体的可见性
+		this.visibleMedia.forEach(obj => {
+		this.hideMedia(obj);
+		});
+		this.visibleMedia = [];
+		this.occupiedGrids.clear();
+
+		// 确保二维码保持在身后位置
+		if (this.donationQR) {
+		this.donationQR.position.set(0, 1.7, 2);
+		// 重置二维码旋转
+		this.donationQR.rotation.set(0, 0, 0);
+		}
+		}
+
+		// 射线检测，用于交互
+		checkIntersections() {
+		const raycaster = new THREE.Raycaster();
+		raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+
+		const intersects = raycaster.intersectObjects(
+		this.visibleMedia
+		.map(obj => obj.mesh)
+		.filter(mesh => mesh && mesh.visible) // 只检查可见的媒体
+		);
+
+		// 清除之前的点击事件
+		this.renderer.domElement.onclick = null;
+		document.body.style.cursor = 'default';
+
+		if (intersects.length > 0) {
+		const mediaObject = this.visibleMedia.find(
+		obj => obj.mesh === intersects[0].object
+		);
+
+		if (mediaObject) {
+		// 检查是否在5米范围内
+		const distance = this.camera.position.distanceTo(mediaObject.mesh.position);
+
+		if (distance <= 5) {
+		// 可以交互
+		document.body.style.cursor = 'pointer';
+
+		// 直接绑定点击事件到当前媒体对象
+		this.renderer.domElement.onclick = () => {
+		console.log('点击媒体:', mediaObject.file.name, '类型:', mediaObject.type);
+		this.handleMediaInteraction(mediaObject);
+		};
+
+		console.log('可交互媒体:', mediaObject.file.name, '距离:', distance.toFixed(2));
+		} else {
+		console.log('媒体距离过远:', mediaObject.file.name, '距离:', distance.toFixed(2));
+		}
+		}
+		}
+		}
+
+		// 修改媒体交互处理
+		handleMediaInteraction(mediaObject) {
+		console.log('处理媒体交互:', mediaObject.file.name);
+
+		// 如果点击的是当前正在播放的媒体，则暂停
+		if (mediaObject === this.currentlyPlaying) {
+		console.log('暂停当前媒体');
+		this.pauseMedia(mediaObject);
+		this.currentlyPlaying = null;
+		this.hideVideoControls();
+		return;
+		}
+
+		// 暂停当前播放的媒体
+		if (this.currentlyPlaying) {
+		console.log('暂停之前播放的媒体:', this.currentlyPlaying.file.name);
+		this.pauseMedia(this.currentlyPlaying);
+		}
+
+		// 只播放视频，GIF作为静态图片不播放
+		if (mediaObject.isVideo) {
+		console.log('播放视频:', mediaObject.file.name);
+		this.playMedia(mediaObject);
+		this.currentlyPlaying = mediaObject;
+		this.showVideoControls();
+		} else {
+		// GIF和静态图片不播放，只标记为当前选中
+		this.currentlyPlaying = mediaObject;
+		this.hideVideoControls();
+		console.log('选中静态媒体:', mediaObject.file.name);
+		}
+		}
+
+		startPerformanceMonitoring() {
+		// 每秒更新一次性能统计
+		setInterval(() => {
+		this.updatePerformanceStats();
+		}, 1000);
+		}
+
+		updatePerformanceStats() {
+		// 更新媒体数量
+		document.getElementById('media-count').textContent = this.mediaObjects.length;
+		document.getElementById('visible-count').textContent = this.visibleMedia.length;
+
+		// 更新内存使用情况（估算）
+		let memoryUsage = 0;
+		this.mediaObjects.forEach(obj => {
+		if (obj.texture) {
+		// 估算纹理内存使用
+		if (obj.isVideo) {
+		memoryUsage += 10; // 视频纹理估计10MB
+		} else {
+		memoryUsage += 5; // 图片纹理估计5MB
+		}
+		}
+		});
+
+		document.getElementById('memory-usage').textContent = memoryUsage.toFixed(1);
+
+		// 更新FPS
+		document.getElementById('fps-counter').textContent = this.fps;
+		}
+
+		animate() {
+		requestAnimationFrame(() => this.animate());
+
+		// 更新移动
+		this.updateMovement();
+
+		// 更新媒体可见性
+		this.evaluateMediaVisibility();
+
+		// 更新媒体
+		for (const mediaObject of this.visibleMedia) {
+
+		// 更新视频控制界面
+		if (mediaObject.type === 'video' && mediaObject.isPlaying) {
+		this.updateVideoControlsUI();
+		}
+		}
+
+		// 更新星空效果
+		this.updateStarfield();
+
+		// 检查交互
+		this.checkIntersections();
+
+		// 更新二维码旋转，使其面向相机（仅跟随垂直旋转）
+		if (this.donationQR) {
+		// 获取相机旋转的Y分量（水平旋转）
+		const cameraYRotation = this.camera.rotation.y;
+
+		// 设置二维码的旋转，使其面向相机
+		this.donationQR.rotation.y = cameraYRotation;
+
+		// 更新文字标签的位置和旋转
+		if (this.donationTexts && this.donationTexts.length > 0) {
+		// 获取二维码的世界位置
+		const qrWorldPosition = new THREE.Vector3();
+		this.donationQR.getWorldPosition(qrWorldPosition);
+
+		// 更新每个文字标签
+		this.donationTexts.forEach((textMesh, index) => {
+		if (textMesh) {
+		// 计算文字标签的位置（相对于二维码）
+		const offsetY = index === 0 ? 1.3 : -1.3; // 上方或下方
+		const offsetZ = 0.1; // 稍微向前突出
+
+		// 计算旋转后的偏移位置
+		const offset = new THREE.Vector3(0, offsetY, offsetZ);
+		offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYRotation);
+
+		// 设置文字标签位置
+		textMesh.position.copy(qrWorldPosition).add(offset);
+
+		// 设置文字标签旋转：只跟随相机的Y轴旋转
+		textMesh.rotation.set(0, cameraYRotation, 0);
+
+		// 确保文字标签始终面向相机（水平方向）
+		textMesh.lookAt(
+		textMesh.position.x + Math.sin(cameraYRotation),
+		textMesh.position.y,
+		textMesh.position.z + Math.cos(cameraYRotation)
+		);
+		}
+		});
+		}
+		}
+
+		// 渲染场景
+		this.renderer.render(this.scene, this.camera);
+
+		// 计算FPS
+		this.frameCount++;
+		const now = performance.now();
+		if (now >= this.lastFpsUpdate + 1000) {
+		this.fps = Math.round((this.frameCount * 1000) / (now - this.lastFpsUpdate));
+		this.frameCount = 0;
+		this.lastFpsUpdate = now;
+		}
+		}
+		}
+
+		// 初始化应用
+		let app = null;
+
+		window.addEventListener('DOMContentLoaded', () => {
+		// 显示开屏界面，等待用户点击开始
+		const splashScreen = document.getElementById('splash-screen');
+		const startButton = document.getElementById('start-button');
+
+		startButton.addEventListener('click', () => {
+		// 隐藏开屏界面
+		splashScreen.classList.add('hidden');
+
+		// 初始化应用
+		app = new VirtualMediaSpace();
+		});
+
+		// 可选：添加键盘快捷键跳过介绍
+		document.addEventListener('keydown', (e) => {
+		if (e.code === 'Enter' || e.code === 'Space') {
+		if (!app && !splashScreen.classList.contains('hidden')) {
+		splashScreen.classList.add('hidden');
+		app = new VirtualMediaSpace();
+		}
+		}
+		});
+		});
+	</script>
 </body>
 
 </html>
